@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "QR Shop",
-    "slug": "qr-app",
+    "slug": "qr-shop-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -65,7 +65,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "b36e88bd-efc1-4cbb-a121-99b5e8034d63"
+        "projectId": "e80e687b-ebcf-45f8-b0d6-63c9d75faadd"
       }
     },
     "owner": "qrmenumyanmar"
