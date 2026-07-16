@@ -30,8 +30,12 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# env files (keep .env.example committed)
+.env
 .env*.local
+
+# Firebase admin SDK keys (never commit)
+*firebase-adminsdk*.json
 
 # typescript
 *.tsbuildinfo

@@ -1,98 +1,540 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useRouter, type Href } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AppState,
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { IconButton, Searchbar } from 'react-native-paper';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { ProductCard, ProductListItem } from '@/components/products/product-card';
+import { ProductCardSkeleton, ProductListItemSkeleton } from '@/components/products/product-card-skeleton';
+import { SkeletonBox } from '@/components/skeleton';
+import { CategoryList } from '@/components/products/category-list';
+import { TabAppToast } from '@/components/app-toast';
+import { searchbarInputStyle } from '@/constants/text-input';
+import { useCart } from '@/contexts/cart-context';
+import { useLanguage } from '@/contexts/language-context';
+import { useAppColors } from '@/contexts/theme-context';
+import { useResponsive } from '@/hooks/use-responsive';
+import { takeCatalogBootstrap } from '@/services/catalog-bootstrap';
+import { onCatalogRefreshRequested } from '@/services/catalog-events';
+import { rememberProductPreview } from '@/services/product-preview-cache';
+import { fetchCategories, fetchProducts, searchProducts } from '@/services/product-api';
+import type { Category, Product } from '@/types/product';
+import { mergeProductsIfChanged } from '@/utils/product-sync';
 
-export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+type ViewMode = 'grid' | 'list';
+const VIEW_MODE_KEY = 'qr-app-products-view-mode';
+const INITIAL_PRODUCT_LIMIT = 50;
+const SKELETON_LIST_COUNT = 6;
+// Gentle background sync while the products tab is open — updates ribbons/new items
+// without hammering the API or re-rendering when nothing changed.
+const CATALOG_POLL_INTERVAL_MS = 45000;
+
+function readBootstrapSeed() {
+  const seed = takeCatalogBootstrap();
+  return {
+    products: seed?.products ?? [],
+    categories: seed?.categories ?? [],
+  };
+}
+
+export default function ProductsScreen() {
+  const router = useRouter();
+  const colors = useAppColors();
+  const { rs, horizontalPadding, gridColumns, gridGap, width } = useResponsive();
+  const { addToCart } = useCart();
+  const { t, lh } = useLanguage();
+  const [bootstrapSeed] = useState(readBootstrapSeed);
+  const [products, setProducts] = useState<Product[]>(bootstrapSeed.products);
+  const [allProducts, setAllProducts] = useState<Product[]>(bootstrapSeed.products);
+  const [categories, setCategories] = useState<Category[]>(bootstrapSeed.categories);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [isCategoriesLoading, setIsCategoriesLoading] = useState(bootstrapSeed.categories.length === 0);
+  const [isLoading, setIsLoading] = useState(bootstrapSeed.products.length === 0);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const [snackbar, setSnackbar] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+
+  const searchQueryRef = useRef(searchQuery);
+  const selectedCategoryRef = useRef(selectedCategoryId);
+  const allProductsRef = useRef(allProducts);
+  const initialLoadDoneRef = useRef(false);
+  const skipNextCategorySyncRef = useRef(true);
+
+  useEffect(() => {
+    searchQueryRef.current = searchQuery;
+  }, [searchQuery]);
+
+  useEffect(() => {
+    selectedCategoryRef.current = selectedCategoryId;
+  }, [selectedCategoryId]);
+
+  useEffect(() => {
+    allProductsRef.current = allProducts;
+  }, [allProducts]);
+
+  const filterProductsLocally = useCallback((source: Product[], categoryId: number | null, query: string) => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return source.filter((product) => {
+      if (categoryId != null) {
+        const ids = product.public_categ_ids ?? [];
+        if (!ids.includes(categoryId)) {
+          return false;
+        }
+      }
+
+      if (normalizedQuery && !product.name.toLowerCase().includes(normalizedQuery)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem(VIEW_MODE_KEY).then((stored) => {
+      if (stored === 'grid' || stored === 'list') {
+        setViewMode(stored);
+      }
+    });
+  }, []);
+
+  const changeViewMode = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    AsyncStorage.setItem(VIEW_MODE_KEY, mode);
+  }, []);
+
+  const numColumns = viewMode === 'list' ? 1 : gridColumns;
+
+  const cardWidth = useMemo(() => {
+    const totalHorizontalPadding = horizontalPadding * 2;
+    const totalGaps = gridGap * (gridColumns - 1);
+    return (width - totalHorizontalPadding - totalGaps) / gridColumns;
+  }, [width, horizontalPadding, gridColumns, gridGap]);
+
+  const skeletonCount = viewMode === 'list' ? SKELETON_LIST_COUNT : gridColumns * 3;
+
+  const skeletonItems = useMemo(
+    () => Array.from({ length: skeletonCount }, (_, index) => index),
+    [skeletonCount],
+  );
+
+  const syncCatalog = useCallback(async (options?: { silent?: boolean; preferLocal?: boolean }) => {
+    const categoryId = selectedCategoryRef.current;
+    const query = searchQueryRef.current.trim();
+
+    if (!options?.silent) {
+      setError('');
+    }
+
+    // Instant UI: filter already-loaded products while the network request runs.
+    if (options?.preferLocal && allProductsRef.current.length > 0 && !query) {
+      setProducts(filterProductsLocally(allProductsRef.current, categoryId, query));
+      setIsSearching(false);
+    }
+
+    const productsPromise = query
+      ? searchProducts(query, categoryId)
+      : fetchProducts(INITIAL_PRODUCT_LIMIT, 0, categoryId);
+
+    const productsData = await productsPromise;
+
+    if (!query && categoryId == null) {
+      setAllProducts(productsData);
+      allProductsRef.current = productsData;
+    } else if (!query && categoryId != null) {
+      // Merge category page into the local cache so later switches stay instant.
+      setAllProducts((previous) => {
+        const byId = new Map(previous.map((product) => [product.id, product]));
+        for (const product of productsData) {
+          byId.set(product.id, product);
+        }
+        const merged = [...byId.values()];
+        allProductsRef.current = merged;
+        return merged;
+      });
+    }
+
+    setProducts((previous) => mergeProductsIfChanged(previous, productsData));
+  }, [filterProductsLocally]);
+
+  // Keep categories warm and complete independently so the search dropdown
+  // does not wait on product fetches / appear half-empty.
+  const syncCategories = useCallback(async () => {
+    setIsCategoriesLoading(true);
+    try {
+      const next = await fetchCategories();
+      setCategories(next);
+    } finally {
+      setIsCategoriesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    syncCatalog()
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load products.');
+      })
+      .finally(() => {
+        setIsLoading(false);
+        initialLoadDoneRef.current = true;
+      });
+  }, [syncCatalog]);
+
+  useEffect(() => {
+    syncCategories().catch(() => {});
+  }, [syncCategories]);
+
+  // Debounce text search only — category changes apply immediately.
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    const query = searchQuery.trim();
+    if (query) {
+      setIsSearching(true);
+    }
+
+    const timeoutId = setTimeout(
+      () => {
+        syncCatalog({ silent: true })
+          .catch(() => {
+            // Keep the current list if a background sync fails.
+          })
+          .finally(() => setIsSearching(false));
+      },
+      query ? 300 : 0,
+    );
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, isLoading, syncCatalog]);
+
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    if (skipNextCategorySyncRef.current) {
+      skipNextCategorySyncRef.current = false;
+      return;
+    }
+
+    const query = searchQueryRef.current.trim();
+    const hasLocalCache = allProductsRef.current.some((product) =>
+      Array.isArray(product.public_categ_ids),
+    );
+
+    // Category-only changes: filter instantly from cache, refresh in background.
+    if (!query && hasLocalCache) {
+      setProducts(
+        filterProductsLocally(allProductsRef.current, selectedCategoryId, query),
+      );
+      setIsSearching(false);
+      syncCatalog({ silent: true, preferLocal: true }).catch(() => {});
+      return;
+    }
+
+    setIsSearching(true);
+    syncCatalog({ silent: true })
+      .catch(() => {})
+      .finally(() => setIsSearching(false));
+  }, [selectedCategoryId, isLoading, syncCatalog, filterProductsLocally]);
+
+  useEffect(() => {
+    return onCatalogRefreshRequested(() => {
+      syncCatalog({ silent: true }).catch(() => {});
+    });
+  }, [syncCatalog]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (initialLoadDoneRef.current) {
+        syncCatalog({ silent: true }).catch(() => {});
+      }
+
+      const intervalId = setInterval(() => {
+        syncCatalog({ silent: true }).catch(() => {});
+      }, CATALOG_POLL_INTERVAL_MS);
+
+      return () => clearInterval(intervalId);
+    }, [syncCatalog]),
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        syncCatalog({ silent: true }).catch(() => {});
+      }
+    });
+
+    return () => subscription.remove();
+  }, [syncCatalog]);
+
+  const handleCategorySelect = useCallback((categoryId: number | null) => {
+    setSelectedCategoryId(categoryId);
+  }, []);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    setSearchQuery('');
+    setSelectedCategoryId(null);
+    searchQueryRef.current = '';
+    selectedCategoryRef.current = null;
+    setError('');
+
+    try {
+      await syncCatalog();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to refresh products.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
+        <View
+          style={[
+            styles.header,
+            {
+              backgroundColor: colors.surface,
+              borderBottomColor: colors.border,
+              paddingHorizontal: horizontalPadding,
+            },
+          ]}>
+          <View style={styles.searchRow}>
+            <SkeletonBox style={styles.searchSkeleton} borderRadius={28} />
+            <SkeletonBox style={styles.viewToggleSkeleton} borderRadius={12} />
+          </View>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          scrollEnabled={false}
+          contentContainerStyle={[styles.categorySkeletonRow, { paddingHorizontal: horizontalPadding }]}>
+          {Array.from({ length: 5 }, (_, index) => (
+            <SkeletonBox key={index} style={styles.categorySkeletonChip} borderRadius={20} />
+          ))}
+        </ScrollView>
+
+        <FlatList
+          data={skeletonItems}
+          key={`skeleton-${viewMode}-${numColumns}`}
+          keyExtractor={(item) => `skeleton-${item}`}
+          numColumns={numColumns}
+          scrollEnabled={false}
+          style={styles.productsList}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingHorizontal: horizontalPadding - 4, paddingTop: rs(12) },
+          ]}
+          columnWrapperStyle={numColumns > 1 ? { gap: gridGap, alignItems: 'stretch' } : undefined}
+          renderItem={() =>
+            viewMode === 'list' ? (
+              <ProductListItemSkeleton />
+            ) : (
+              <View style={{ width: cardWidth, flex: 1 }}>
+                <ProductCardSkeleton width={cardWidth} />
+              </View>
+            )
+          }
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+      </SafeAreaView>
+    );
+  }
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  return (
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingHorizontal: horizontalPadding }]}>
+        <View style={styles.searchRow}>
+          <Searchbar
+            placeholder={t('products.searchPlaceholder')}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            style={[styles.searchbar, { backgroundColor: colors.inputBg, flex: 1 }]}
+            inputStyle={searchbarInputStyle}
+            iconColor={colors.textMuted}
+            placeholderTextColor={colors.textMuted}
+          />
+          <View style={[styles.viewToggle, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+            <IconButton
+              icon="view-grid-outline"
+              size={20}
+              onPress={() => changeViewMode('grid')}
+              iconColor={viewMode === 'grid' ? colors.primary : colors.textMuted}
+              style={styles.viewToggleButton}
+              accessibilityLabel="Grid view"
+            />
+            <IconButton
+              icon="format-list-bulleted"
+              size={20}
+              onPress={() => changeViewMode('list')}
+              iconColor={viewMode === 'list' ? colors.primary : colors.textMuted}
+              style={styles.viewToggleButton}
+              accessibilityLabel="List view"
+            />
+          </View>
+        </View>
+      </View>
+
+      {error ? (
+        <View style={{ paddingHorizontal: horizontalPadding }}>
+          <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
+        </View>
+      ) : null}
+
+      <CategoryList
+        categories={categories}
+        selectedCategoryId={selectedCategoryId}
+        isLoading={isCategoriesLoading}
+        horizontalPadding={horizontalPadding}
+        onSelect={handleCategorySelect}
+      />
+
+      <View style={styles.listArea}>
+        <FlatList
+          data={products}
+          key={`${viewMode}-${numColumns}`}
+          keyExtractor={(item) => String(item.id)}
+          numColumns={numColumns}
+          style={styles.productsList}
+          contentContainerStyle={[styles.listContent, { paddingHorizontal: horizontalPadding - 4, paddingTop: rs(12) }]}
+          columnWrapperStyle={numColumns > 1 ? { gap: gridGap, alignItems: 'stretch' } : undefined}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
+          ListEmptyComponent={
+            isSearching ? null : (
+              <View style={styles.emptyWrap}>
+                <Text style={[styles.emptyText, { color: colors.textMuted, lineHeight: lh(16) }]}>{t('products.empty')}</Text>
+              </View>
+            )
+          }
+          renderItem={({ item }) => {
+            const handleAdd = (product: Product) => {
+              addToCart(product, 1);
+              setSnackbar(t('products.addedToCart', { name: product.name }));
+            };
+
+            const openDetail = () => {
+              rememberProductPreview(item);
+              router.push(`/product/${item.id}` as Href);
+            };
+
+            return viewMode === 'list' ? (
+              <Pressable onPress={openDetail}>
+                <ProductListItem product={item} onAddToCart={handleAdd} />
+              </Pressable>
+            ) : (
+              <Pressable onPress={openDetail} style={{ width: cardWidth, flex: 1, alignSelf: 'stretch' }}>
+                <ProductCard product={item} width={cardWidth} onAddToCart={handleAdd} />
+              </Pressable>
+            );
+          }}
+        />
+
+        {isSearching ? (
+          <View style={styles.centerLoading} pointerEvents="none">
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : null}
+      </View>
+
+      <TabAppToast
+        message={snackbar}
+        visible={!!snackbar}
+        onDismiss={() => setSnackbar('')}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  screen: {
+    flex: 1,
+  },
+  header: {
+    borderBottomWidth: 1,
+    paddingBottom: 12,
+    paddingTop: 8,
+    zIndex: 10,
+  },
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  searchSkeleton: {
+    flex: 1,
+    height: 56,
+    borderRadius: 28,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  viewToggleSkeleton: {
+    width: 88,
+    height: 48,
+  },
+  categorySkeletonRow: {
+    gap: 8,
+    paddingVertical: 10,
+  },
+  categorySkeletonChip: {
+    height: 36,
+    width: 88,
+  },
+  searchbar: {
+    elevation: 0,
+  },
+  productsList: {
+    flex: 1,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  viewToggleButton: {
+    margin: 0,
+  },
+  listArea: {
+    flex: 1,
+    position: 'relative',
+    marginTop: 12,
+  },
+  listContent: {
+    paddingBottom: 24,
+    flexGrow: 1,
+  },
+  centerLoading: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyWrap: {
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  emptyText: {
+    fontSize: 16,
+  },
+  errorText: {
+    textAlign: 'center',
+    marginBottom: 8,
+    fontSize: 14,
   },
 });
