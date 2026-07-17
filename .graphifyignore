@@ -1,0 +1,35 @@
+# Heavy / generated folders
+node_modules/
+.expo/
+dist/
+web-build/
+android/
+ios/
+.kotlin/
+
+# Lockfiles and build artifacts
+*.lock
+package-lock.json
+*.tsbuildinfo
+
+# Env / secrets / credentials
+.env
+.env*.local
+google-services.json
+*firebase-adminsdk*.json
+
+# Graphify self / agent instruction files
+AGENTS.md
+CLAUDE.md
+.cursor/
+.claude/
+
+# Assets that don't help the code graph much
+assets/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.svg
+*.mp4
