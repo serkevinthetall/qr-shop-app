@@ -45,3 +45,8 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Graphify (keep graph outputs; skip local-only cache)
+graphify-out/cache/
+graphify-out/manifest.json
+graphify-out/cost.json

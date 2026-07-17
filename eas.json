@@ -8,7 +8,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://qr-shop-api.onrender.com"
+        "EXPO_PUBLIC_API_BASE_URL": "https://qr-shop-app-backend.vercel.app"
       }
     },
     "preview": {
@@ -17,13 +17,16 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://qr-shop-api.onrender.com"
+        "EXPO_PUBLIC_API_BASE_URL": "https://qr-shop-app-backend.vercel.app"
       }
     },
     "production": {
       "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://qr-shop-api.onrender.com"
+        "EXPO_PUBLIC_API_BASE_URL": "https://qr-shop-app-backend.vercel.app"
       }
     }
   },
