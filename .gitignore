@@ -50,3 +50,7 @@ app-example
 graphify-out/cache/
 graphify-out/manifest.json
 graphify-out/cost.json
+
+# Firebase / FCM private keys (never commit)
+credentials/
+*firebase-adminsdk*.json

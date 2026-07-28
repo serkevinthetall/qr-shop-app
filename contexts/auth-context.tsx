@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { loginWithApi, logoutFromApi } from '@/services/auth-api';
 import { clearSessionBootstrap } from '@/services/catalog-bootstrap';
 import { unregisterPushToken } from '@/services/notification-api';
+import { trackLoginSuccess } from '@/services/analytics';
 
 const SESSION_KEY = 'qr-app-session';
 const TOKEN_KEY = 'qr-app-token';
@@ -103,6 +104,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await persistSession({
         token: data.token,
         user: data.user,
+      });
+
+      // Track native app analytics only (Vercel Analytics is web-only).
+      // Do not block login if analytics fails.
+      await trackLoginSuccess({
+        userId: data.user.id,
+        loginType: trimmedLogin.includes('@') ? 'email' : 'phone',
       });
 
       return data.token;

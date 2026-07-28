@@ -25,6 +25,7 @@ import { DatePickerField } from '@/components/date-picker-field';
 import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 
 // const KPAY_QR_IMAGE = require('@/assets/images/kpay-qr.png');
+import { MYANMAR_FONTS } from '@/constants/fonts';
 import { useAuth } from '@/contexts/auth-context';
 import { useCart } from '@/contexts/cart-context';
 import { useLanguage } from '@/contexts/language-context';
@@ -52,7 +53,7 @@ export default function CheckoutScreen() {
   const { rs, horizontalPadding, contentMaxWidth } = useResponsive();
   const { token } = useAuth();
   const { items, totalAmount, clearCart } = useCart();
-  const { t, fs, lh } = useLanguage();
+  const { language, t, fs, lh } = useLanguage();
   const addressRef = useRef<AddressCheckoutHandle>(null);
   const scrollRef = useRef<ScrollView>(null);
   const notesFieldRef = useRef<View>(null);
@@ -462,11 +463,17 @@ export default function CheckoutScreen() {
               placeholderTextColor={colors.textMuted}
               returnKeyType="done"
               blurOnSubmit
+              multiline
+              textAlignVertical="top"
               style={[
                 styles.notesInput,
                 {
                   color: colors.text,
-                  fontSize: 15,
+                  fontSize: fs(15),
+                  // Myanmar glyphs need room — never force a tight height/lineHeight.
+                  ...(language === 'my'
+                    ? { fontFamily: MYANMAR_FONTS.regular }
+                    : null),
                 },
               ]}
             />
@@ -581,7 +588,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   notesInput: {
-    height: 22,
+    minHeight: 48,
     padding: 0,
     margin: 0,
   },

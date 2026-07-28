@@ -1,8 +1,9 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   Pressable,
   RefreshControl,
@@ -314,14 +315,33 @@ export default function OrdersScreen() {
   useEffect(() => {
     if (ordersSeed && token) {
       enrichItemCounts(ordersSeed, token);
-      setIsLoading(false);
-      return;
     }
 
     loadOrders()
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load orders.'))
       .finally(() => setIsLoading(false));
   }, [loadOrders, ordersSeed, token, enrichItemCounts]);
+
+  // Re-fetch when the Orders tab regains focus (e.g. after checkout).
+  useFocusEffect(
+    useCallback(() => {
+      loadOrders().catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load orders.');
+      });
+    }, [loadOrders]),
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        loadOrders().catch(() => {
+          // Keep showing the last known list if the refresh fails.
+        });
+      }
+    });
+
+    return () => subscription.remove();
+  }, [loadOrders]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -361,11 +381,10 @@ export default function OrdersScreen() {
           value={search}
           onChangeText={setSearch}
           placeholder={lang.t('orders.searchPlaceholder')}
-          style={[styles.searchbar, styles.searchbarFlex, { backgroundColor: colors.card, borderColor: colors.border }]}
-          inputStyle={[searchbarInputStyle, styles.searchInput, { color: colors.text }]}
+          style={[styles.searchbar, styles.searchbarFlex, { backgroundColor: colors.inputBg }]}
+          inputStyle={searchbarInputStyle}
           placeholderTextColor={colors.textMuted}
           iconColor={colors.textMuted}
-          elevation={0}
         />
         <Menu
           visible={dateMenuVisible}
@@ -450,14 +469,13 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     marginBottom: 12,
   },
-  searchbar: { borderWidth: 1, borderRadius: 14, height: 48 },
+  searchbar: { elevation: 0 },
   searchbarFlex: { flex: 1 },
-  searchInput: { alignSelf: 'center' },
   dateButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    height: 48,
+    minHeight: 48,
     paddingHorizontal: 12,
     borderWidth: 1,
     borderRadius: 14,

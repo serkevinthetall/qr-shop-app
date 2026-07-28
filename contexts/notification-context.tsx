@@ -175,8 +175,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       return;
     }
 
-    syncPushRegistration().catch(() => {
-      // Push registration is optional; in-app notifications still work.
+    syncPushRegistration().catch((err) => {
+      console.warn('Push token registration failed:', err);
     });
   }, [token, isLanguageReady, language, syncPushRegistration]);
 
@@ -194,7 +194,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         refresh(true);
-        syncPushRegistration().catch(() => {});
+        syncPushRegistration().catch((err) => {
+          console.warn('Push token registration failed:', err);
+        });
       }
     });
 
