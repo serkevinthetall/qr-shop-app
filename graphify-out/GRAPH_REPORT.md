@@ -1,15 +1,16 @@
-# Graph Report - .  (2026-07-17)
+# Graph Report - qr-app  (2026-07-28)
 
 ## Corpus Check
-- cluster-only mode — file stats not available
+- 100 files · ~33,966 words
+- Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 635 nodes · 1476 edges · 56 communities (23 shown, 33 thin omitted)
-- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 3 edges (avg confidence: 0.6)
+- 664 nodes · 1378 edges · 63 communities (25 shown, 38 thin omitted)
+- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 4 edges (avg confidence: 0.65)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `e1cc8507`
+- Built from commit: `14ef696f`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -65,91 +66,98 @@
 - Community 50
 - Community 51
 - Community 52
+- expo-linking
+- expo-system-ui
+- @react-native-firebase/analytics
+- @react-native-firebase/app
+- react-native-qrcode-svg
+- react-native-svg
+- @vercel/analytics
 
 ## God Nodes (most connected - your core abstractions)
-1. `useLanguage()` - 57 edges
-2. `useAppColors()` - 57 edges
-3. `useResponsive()` - 44 edges
-4. `useAuth()` - 28 edges
+1. `useAppColors()` - 49 edges
+2. `useLanguage()` - 45 edges
+3. `useResponsive()` - 40 edges
+4. `useAuth()` - 29 edges
 5. `expo-router` - 20 edges
 6. `formatPrice()` - 19 edges
 7. `expo` - 16 edges
 8. `AccountScreen()` - 16 edges
-9. `useThemeMode()` - 16 edges
-10. `CheckoutScreen()` - 15 edges
+9. `ProductDetailScreen()` - 14 edges
+10. `useThemeMode()` - 14 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `CartTabIcon()` --calls--> `useCart()`  [EXTRACTED]
   app/(tabs)/_layout.tsx → contexts/cart-context.tsx
-- `TabLayout()` --indirect_call--> `HapticTab()`  [INFERRED]
-  app/(tabs)/_layout.tsx → components/haptic-tab.tsx
-- `TabLayout()` --calls--> `useLanguage()`  [EXTRACTED]
-  app/(tabs)/_layout.tsx → contexts/language-context.tsx
-- `TabLayout()` --calls--> `useAppColors()`  [EXTRACTED]
-  app/(tabs)/_layout.tsx → contexts/theme-context.tsx
-- `AccountScreen()` --calls--> `useAuth()`  [EXTRACTED]
-  app/(tabs)/account.tsx → contexts/auth-context.tsx
+- `ProductsScreen()` --calls--> `useAuth()`  [EXTRACTED]
+  app/(tabs)/index.tsx → contexts/auth-context.tsx
+- `OrderCard()` --calls--> `formatPrice()`  [EXTRACTED]
+  app/(tabs)/orders.tsx → types/product.ts
+- `OrdersScreen()` --calls--> `useAuth()`  [EXTRACTED]
+  app/(tabs)/orders.tsx → contexts/auth-context.tsx
+- `RootLayout()` --indirect_call--> `trackAppOpen()`  [INFERRED]
+  app/_layout.tsx → services/analytics.ts
 
 ## Import Cycles
 - None detected.
 
-## Communities (56 total, 33 thin omitted)
+## Communities (63 total, 38 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.06
-Nodes (71): ChangePasswordScreen(), ProductDetailScreen(), styles, CartScreen(), styles, ProductsScreen(), readBootstrapSeed(), styles (+63 more)
+Nodes (73): ChangePasswordScreen(), styles, NotificationsScreen(), styles, useRelativeTime(), ProductDetailScreen(), styles, CartScreen() (+65 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.08
-Nodes (40): AddressesScreen(), styles, AddressDisplayText(), AddressDisplayTextProps, styles, addressFormFromAddress(), AddressFormModal(), AddressFormModalProps (+32 more)
+Nodes (42): AddressesScreen(), styles, AddressDisplayText(), AddressDisplayTextProps, styles, addressFormFromAddress(), AddressFormValues, emptyAddressForm (+34 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.10
-Nodes (42): CheckoutScreen(), PaymentMethod, styles, AccountScreen(), readAccountSeed(), styles, AccountBootstrap, CatalogBootstrap (+34 more)
+Cohesion: 0.12
+Nodes (28): AccountScreen(), readAccountSeed(), styles, useNotifications(), AccountBootstrap, CatalogBootstrap, clearCatalogBootstrap(), clearSessionBootstrap() (+20 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.07
-Nodes (39): plugins, AppColors, getStatusBadgeColors(), OrderDetailScreen(), styles, AppColors, DATE_FILTERS, DateFilter (+31 more)
+Nodes (39): CheckoutScreen(), PaymentMethod, styles, AppColors, getStatusBadgeColors(), OrderDetailScreen(), styles, CartTabIcon() (+31 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.07
-Nodes (35): styles, LATIN_BUTTON_FONT, LoginScreen(), LOGO_DARK, LOGO_LIGHT, styles, CartTabIcon(), getAndroidTabBarStyle() (+27 more)
+Cohesion: 0.20
+Nodes (16): RootLayout(), RootNavigator(), withBrandColors(), withBurmeseFonts(), AuthContext, AuthContextValue, AuthProvider(), isValidEmail() (+8 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.10
-Nodes (37): NotificationsScreen(), styles, useRelativeTime(), NotificationBootstrap(), describeNotification(), NotificationContext, NotificationContextValue, NotificationProvider() (+29 more)
+Cohesion: 0.15
+Nodes (22): NotificationBootstrap(), describeNotification(), NotificationContext, NotificationContextValue, NotificationProvider(), CatalogRefreshListener, listeners, requestCatalogRefresh() (+14 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.08
-Nodes (32): AppEntryScreen(), RootNavigator(), withBrandColors(), withBurmeseFonts(), DatePickerField(), DatePickerFieldProps, formatDisplay(), parseIsoDate() (+24 more)
+Cohesion: 0.11
+Nodes (20): AppEntryScreen(), LATIN_BUTTON_FONT, LoginScreen(), LOGO_DARK, LOGO_LIGHT, styles, KeyboardAwareScrollView, KeyboardAwareScrollViewProps (+12 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.06
-Nodes (34): backgroundColor, foregroundImage, monochromeImage, adaptiveIcon, edgeToEdgeEnabled, googleServicesFile, package, permissions (+26 more)
+Cohesion: 0.05
+Nodes (41): backgroundColor, foregroundImage, monochromeImage, adaptiveIcon, edgeToEdgeEnabled, googleServicesFile, package, permissions (+33 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.13
-Nodes (19): styles, ParallaxScrollView(), Props, styles, styles, ThemedText(), ThemedTextProps, ThemedView() (+11 more)
+Cohesion: 0.11
+Nodes (21): styles, ParallaxScrollView(), Props, styles, styles, ThemedText(), ThemedTextProps, ThemedView() (+13 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.13
-Nodes (22): API_BASE_URL, apiBaseUrl, PAYMENT_CONFIG, dictionaries, en, interpolate(), Language, my (+14 more)
+Cohesion: 0.07
+Nodes (37): API_BASE_URL, apiBaseUrl, PAYMENT_CONFIG, dictionaries, en, interpolate(), Language, my (+29 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.08
 Nodes (25): eslint, eslint-config-expo, devDependencies, eslint, eslint-config-expo, tailwindcss, @types/react, typescript (+17 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.15
-Nodes (20): AddressFormFieldsProps, addressFormFromCityPrefill(), AddressFormValues, emptyAddressForm, styles, styles, TownshipPickerProps, styles (+12 more)
+Cohesion: 0.17
+Nodes (18): AddressFormFieldsProps, addressFormFromCityPrefill(), styles, styles, TownshipPicker(), TownshipPickerProps, styles, TownshipSearch() (+10 more)
 
 ### Community 12 - "Community 12"
 Cohesion: 0.15
 Nodes (12): expo-env.d.ts, expo/tsconfig.base, .expo/types/**/*.ts, nativewind-env.d.ts, **/*.ts, **/*.tsx, compilerOptions, paths (+4 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.22
-Nodes (10): babel-preset-expo, expo-linking, expo-system-ui, dependencies, babel-preset-expo, expo-linking, expo-system-ui, react-native-qrcode-svg (+2 more)
+Cohesion: 0.18
+Nodes (11): babel-preset-expo, expo-notifications, expo-status-bar, dependencies, babel-preset-expo, expo-notifications, expo-status-bar, @react-native-community/netinfo (+3 more)
 
 ### Community 14 - "Community 14"
 Cohesion: 0.22
@@ -163,29 +171,37 @@ Nodes (5): decodeHtmlEntities(), getProductDescription(), getProductDescriptionS
 Cohesion: 0.50
 Nodes (3): config, { getDefaultConfig }, { withNativeWind }
 
-### Community 18 - "Community 18"
-Cohesion: 0.67
-Nodes (3): @react-navigation/elements, @react-navigation/native, @react-navigation/native
+### Community 30 - "Community 30"
+Cohesion: 0.09
+Nodes (33): ProductsScreen(), readBootstrapSeed(), styles, ViewMode, CategoryList(), CategoryListProps, styles, prefetchCatalog() (+25 more)
+
+### Community 33 - "Community 33"
+Cohesion: 0.16
+Nodes (12): AppColors, DATE_FILTERS, DateFilter, getDateThreshold(), getStatusBadgeColors(), Language, OrderCard(), OrdersScreen() (+4 more)
+
+### Community 43 - "Community 43"
+Cohesion: 0.50
+Nodes (4): NetworkContext, NetworkContextValue, NetworkProvider(), resolveOnline()
 
 ## Knowledge Gaps
-- **241 isolated node(s):** `name`, `slug`, `version`, `orientation`, `icon` (+236 more)
+- **258 isolated node(s):** `name`, `slug`, `version`, `orientation`, `icon` (+253 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **33 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **38 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `expo-router` connect `Community 3` to `Community 0`, `Community 1`, `Community 2`, `Community 4`, `Community 5`, `Community 6`, `Community 8`?**
-  _High betweenness centrality (0.116) - this node is a cross-community bridge._
-- **Why does `expo` connect `Community 7` to `Community 3`?**
-  _High betweenness centrality (0.081) - this node is a cross-community bridge._
-- **Why does `plugins` connect `Community 3` to `Community 7`?**
-  _High betweenness centrality (0.080) - this node is a cross-community bridge._
+- **Why does `expo-router` connect `Community 3` to `Community 0`, `Community 1`, `Community 2`, `Community 33`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 30`?**
+  _High betweenness centrality (0.145) - this node is a cross-community bridge._
+- **Why does `plugins` connect `Community 7` to `Community 3`?**
+  _High betweenness centrality (0.088) - this node is a cross-community bridge._
 - **What connects `name`, `slug`, `version` to the rest of the system?**
-  _241 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _258 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.06275946275946276 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05892634207240949 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.08345428156748912 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07878787878787878 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**
-  _Cohesion score 0.09863945578231292 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.11587301587301588 - nodes in this community are weakly interconnected._
+- **Should `Community 3` be split into smaller, more focused modules?**
+  _Cohesion score 0.06938775510204082 - nodes in this community are weakly interconnected._
