@@ -12,7 +12,9 @@ import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } fro
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import { Analytics } from '@vercel/analytics/react';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { MD3DarkTheme, MD3LightTheme, PaperProvider, type MD3Theme } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
@@ -21,12 +23,13 @@ import { getAppColors } from '@/constants/app-colors';
 import { MYANMAR_FONTS } from '@/constants/fonts';
 import { NotificationBootstrap } from '@/components/notification-bootstrap';
 import { OfflineNotice } from '@/components/offline-notice';
-import { AuthProvider, useAuth } from '@/contexts/auth-context';
+import { AuthProvider } from '@/contexts/auth-context';
 import { CartProvider } from '@/contexts/cart-context';
 import { LanguageProvider, useLanguage } from '@/contexts/language-context';
 import { NetworkProvider } from '@/contexts/network-context';
 import { NotificationProvider } from '@/contexts/notification-context';
 import { ThemeProvider, useThemeMode } from '@/contexts/theme-context';
+import { initAppAnalytics, trackAppOpen } from '@/services/analytics';
 
 // Map the central app palette onto the React Native Paper theme so Paper
 // components (buttons, inputs, switches, etc.) match the rest of the app.
@@ -113,6 +116,8 @@ function RootNavigator() {
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         </Stack>
         <StatusBar style={isDark ? 'light' : 'dark'} />
+        {/* Vercel Analytics only tracks the web app, not native Android/iOS. */}
+        {Platform.OS === 'web' ? <Analytics /> : null}
       </NavigationThemeProvider>
     </PaperProvider>
   );
@@ -129,6 +134,9 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
+      initAppAnalytics()
+        .then(trackAppOpen)
+        .catch(() => {});
     }
   }, [fontsLoaded, fontError]);
 

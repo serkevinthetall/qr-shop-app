@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "971286177050",
-    "project_id": "qr-shop-f5da2",
-    "storage_bucket": "qr-shop-f5da2.firebasestorage.app"
+    "project_number": "527593320319",
+    "project_id": "qr-shop-myanmar",
+    "storage_bucket": "qr-shop-myanmar.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:971286177050:android:b85b85d7b1ecfc21f578a3",
+        "mobilesdk_app_id": "1:527593320319:android:c618e67385eb895f99344a",
         "android_client_info": {
-          "package_name": "com.qrshop.app"
+          "package_name": "com.qrshop.myanmar"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyD6xr5OEjWgb4WDey1A98m1q4OuGk8PPOU"
+          "current_key": "AIzaSyAK3Wk4Voh11pKq7OifEwg65mcw2mEeQcE"
         }
       ],
       "services": {

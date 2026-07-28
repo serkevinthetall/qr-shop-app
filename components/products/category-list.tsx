@@ -2,14 +2,15 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 
 import { useLanguage } from '@/contexts/language-context';
 import { useAppColors } from '@/contexts/theme-context';
-import type { Category } from '@/types/product';
+import { JUST_FOR_YOU, type Category, type CategorySelection } from '@/types/product';
 
 type CategoryListProps = {
   categories: Category[];
-  selectedCategoryId: number | null;
+  selectedCategoryId: CategorySelection;
   isLoading?: boolean;
   horizontalPadding?: number;
-  onSelect: (categoryId: number | null) => void;
+  showJustForYou?: boolean;
+  onSelect: (categoryId: CategorySelection) => void;
 };
 
 export function CategoryList({
@@ -17,6 +18,7 @@ export function CategoryList({
   selectedCategoryId,
   isLoading = false,
   horizontalPadding = 16,
+  showJustForYou = false,
   onSelect,
 }: CategoryListProps) {
   const colors = useAppColors();
@@ -37,6 +39,32 @@ export function CategoryList({
             styles.scrollContent,
             { paddingHorizontal: horizontalPadding },
           ]}>
+          {showJustForYou ? (
+            <Pressable
+              onPress={() => onSelect(JUST_FOR_YOU)}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor:
+                    selectedCategoryId === JUST_FOR_YOU ? colors.primaryContainer : 'transparent',
+                  borderColor: selectedCategoryId === JUST_FOR_YOU ? colors.primary : colors.border,
+                },
+              ]}>
+              <Text
+                style={[
+                  styles.chipText,
+                  {
+                    color: selectedCategoryId === JUST_FOR_YOU ? colors.primary : colors.text,
+                    fontSize: fs(13),
+                    lineHeight: lh(13),
+                  },
+                ]}
+                numberOfLines={1}>
+                {t('products.justForYou')}
+              </Text>
+            </Pressable>
+          ) : null}
+
           <Pressable
             onPress={() => onSelect(null)}
             style={[
@@ -99,21 +127,22 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: 'transparent',
   },
-  scrollContent: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-  },
   loading: {
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+  },
+  scrollContent: {
+    gap: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
   },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
+    maxWidth: 180,
   },
   chipText: {
     fontWeight: '600',

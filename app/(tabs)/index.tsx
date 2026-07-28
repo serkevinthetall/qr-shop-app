@@ -21,15 +21,23 @@ import { SkeletonBox } from '@/components/skeleton';
 import { CategoryList } from '@/components/products/category-list';
 import { TabAppToast } from '@/components/app-toast';
 import { searchbarInputStyle } from '@/constants/text-input';
+import { useAuth } from '@/contexts/auth-context';
 import { useCart } from '@/contexts/cart-context';
 import { useLanguage } from '@/contexts/language-context';
 import { useAppColors } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import { takeCatalogBootstrap } from '@/services/catalog-bootstrap';
 import { onCatalogRefreshRequested } from '@/services/catalog-events';
+import { fetchPartnerTags } from '@/services/customer-api';
 import { rememberProductPreview } from '@/services/product-preview-cache';
 import { fetchCategories, fetchProducts, searchProducts } from '@/services/product-api';
-import type { Category, Product } from '@/types/product';
+import {
+  JUST_FOR_YOU,
+  productMatchesPartnerTags,
+  type Category,
+  type CategorySelection,
+  type Product,
+} from '@/types/product';
 import { mergeProductsIfChanged } from '@/utils/product-sync';
 
 type ViewMode = 'grid' | 'list';
@@ -52,14 +60,16 @@ export default function ProductsScreen() {
   const router = useRouter();
   const colors = useAppColors();
   const { rs, horizontalPadding, gridColumns, gridGap, width } = useResponsive();
+  const { token } = useAuth();
   const { addToCart } = useCart();
   const { t, lh } = useLanguage();
   const [bootstrapSeed] = useState(readBootstrapSeed);
   const [products, setProducts] = useState<Product[]>(bootstrapSeed.products);
   const [allProducts, setAllProducts] = useState<Product[]>(bootstrapSeed.products);
   const [categories, setCategories] = useState<Category[]>(bootstrapSeed.categories);
+  const [partnerTags, setPartnerTags] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<CategorySelection>(null);
   const [isCategoriesLoading, setIsCategoriesLoading] = useState(bootstrapSeed.categories.length === 0);
   const [isLoading, setIsLoading] = useState(bootstrapSeed.products.length === 0);
   const [isSearching, setIsSearching] = useState(false);
@@ -71,8 +81,11 @@ export default function ProductsScreen() {
   const searchQueryRef = useRef(searchQuery);
   const selectedCategoryRef = useRef(selectedCategoryId);
   const allProductsRef = useRef(allProducts);
+  const partnerTagsRef = useRef(partnerTags);
+  const tokenRef = useRef(token);
   const initialLoadDoneRef = useRef(false);
   const skipNextCategorySyncRef = useRef(true);
+  const showJustForYou = partnerTags.length > 0;
 
   useEffect(() => {
     searchQueryRef.current = searchQuery;
@@ -86,24 +99,79 @@ export default function ProductsScreen() {
     allProductsRef.current = allProducts;
   }, [allProducts]);
 
-  const filterProductsLocally = useCallback((source: Product[], categoryId: number | null, query: string) => {
-    const normalizedQuery = query.trim().toLowerCase();
+  useEffect(() => {
+    partnerTagsRef.current = partnerTags;
+  }, [partnerTags]);
 
-    return source.filter((product) => {
-      if (categoryId != null) {
-        const ids = product.public_categ_ids ?? [];
-        if (!ids.includes(categoryId)) {
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!token) {
+      setPartnerTags([]);
+      setSelectedCategoryId((current) => (current === JUST_FOR_YOU ? null : current));
+      return;
+    }
+
+    fetchPartnerTags(token)
+      .then((tags) => {
+        if (cancelled) {
+          return;
+        }
+
+        setPartnerTags(tags);
+
+        if (!tags.length) {
+          setSelectedCategoryId((current) => (current === JUST_FOR_YOU ? null : current));
+          return;
+        }
+
+        // Default to Just for you when tags are available (app open / login).
+        setSelectedCategoryId(JUST_FOR_YOU);
+        selectedCategoryRef.current = JUST_FOR_YOU;
+        // Ensure the category sync effect runs for this default selection.
+        skipNextCategorySyncRef.current = false;
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPartnerTags([]);
+          setSelectedCategoryId((current) => (current === JUST_FOR_YOU ? null : current));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  const filterProductsLocally = useCallback(
+    (source: Product[], selection: CategorySelection, query: string, tags: string[] = partnerTagsRef.current) => {
+      const normalizedQuery = query.trim().toLowerCase();
+
+      return source.filter((product) => {
+        if (selection === JUST_FOR_YOU) {
+          if (!productMatchesPartnerTags(product, tags)) {
+            return false;
+          }
+        } else if (typeof selection === 'number') {
+          const ids = product.public_categ_ids ?? [];
+          if (!ids.includes(selection)) {
+            return false;
+          }
+        }
+
+        if (normalizedQuery && !product.name.toLowerCase().includes(normalizedQuery)) {
           return false;
         }
-      }
 
-      if (normalizedQuery && !product.name.toLowerCase().includes(normalizedQuery)) {
-        return false;
-      }
-
-      return true;
-    });
-  }, []);
+        return true;
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     AsyncStorage.getItem(VIEW_MODE_KEY).then((stored) => {
@@ -134,8 +202,9 @@ export default function ProductsScreen() {
   );
 
   const syncCatalog = useCallback(async (options?: { silent?: boolean; preferLocal?: boolean }) => {
-    const categoryId = selectedCategoryRef.current;
+    const selection = selectedCategoryRef.current;
     const query = searchQueryRef.current.trim();
+    const authToken = tokenRef.current;
 
     if (!options?.silent) {
       setError('');
@@ -143,21 +212,21 @@ export default function ProductsScreen() {
 
     // Instant UI: filter already-loaded products while the network request runs.
     if (options?.preferLocal && allProductsRef.current.length > 0 && !query) {
-      setProducts(filterProductsLocally(allProductsRef.current, categoryId, query));
+      setProducts(filterProductsLocally(allProductsRef.current, selection, query));
       setIsSearching(false);
     }
 
     const productsPromise = query
-      ? searchProducts(query, categoryId)
-      : fetchProducts(INITIAL_PRODUCT_LIMIT, 0, categoryId);
+      ? searchProducts(query, selection, authToken)
+      : fetchProducts(INITIAL_PRODUCT_LIMIT, 0, selection, authToken);
 
     const productsData = await productsPromise;
 
-    if (!query && categoryId == null) {
+    if (!query && selection == null) {
       setAllProducts(productsData);
       allProductsRef.current = productsData;
-    } else if (!query && categoryId != null) {
-      // Merge category page into the local cache so later switches stay instant.
+    } else if (!query && selection != null) {
+      // Merge filtered page into the local cache so later switches stay instant.
       setAllProducts((previous) => {
         const byId = new Map(previous.map((product) => [product.id, product]));
         for (const product of productsData) {
@@ -238,9 +307,12 @@ export default function ProductsScreen() {
     const hasLocalCache = allProductsRef.current.some((product) =>
       Array.isArray(product.public_categ_ids),
     );
+    const canFilterJustForYouLocally =
+      selectedCategoryId !== JUST_FOR_YOU ||
+      allProductsRef.current.some((product) => Array.isArray(product.tags));
 
     // Category-only changes: filter instantly from cache, refresh in background.
-    if (!query && hasLocalCache) {
+    if (!query && hasLocalCache && canFilterJustForYouLocally) {
       setProducts(
         filterProductsLocally(allProductsRef.current, selectedCategoryId, query),
       );
@@ -285,19 +357,33 @@ export default function ProductsScreen() {
     return () => subscription.remove();
   }, [syncCatalog]);
 
-  const handleCategorySelect = useCallback((categoryId: number | null) => {
+  const handleCategorySelect = useCallback((categoryId: CategorySelection) => {
     setSelectedCategoryId(categoryId);
   }, []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     setSearchQuery('');
-    setSelectedCategoryId(null);
     searchQueryRef.current = '';
-    selectedCategoryRef.current = null;
     setError('');
 
     try {
+      let nextSelection: CategorySelection = null;
+
+      if (tokenRef.current) {
+        try {
+          const tags = await fetchPartnerTags(tokenRef.current);
+          setPartnerTags(tags);
+          nextSelection = tags.length ? JUST_FOR_YOU : null;
+        } catch {
+          nextSelection = partnerTagsRef.current.length ? JUST_FOR_YOU : null;
+        }
+      }
+
+      setSelectedCategoryId(nextSelection);
+      selectedCategoryRef.current = nextSelection;
+      skipNextCategorySyncRef.current = true;
+
       await syncCatalog();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh products.');
@@ -405,6 +491,7 @@ export default function ProductsScreen() {
         selectedCategoryId={selectedCategoryId}
         isLoading={isCategoriesLoading}
         horizontalPadding={horizontalPadding}
+        showJustForYou={showJustForYou}
         onSelect={handleCategorySelect}
       />
 

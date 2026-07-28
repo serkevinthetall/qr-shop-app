@@ -50,6 +50,7 @@ const en: TranslationTree = {
     addToCart: 'Add to Cart',
     categories: 'Categories',
     all: 'All',
+    justForYou: 'Just for you',
     loadingProducts: 'Loading products...',
   },
   orderDetail: {
@@ -305,6 +306,7 @@ const my: TranslationTree = {
     addToCart: 'ခြင်းထဲ ထည့်ရန်',
     categories: 'အမျိုးအစားများ',
     all: 'အားလုံး',
+    justForYou: 'သင့်အတွက်ပဲ',
     loadingProducts: 'ပစ္စည်းများ ဖွင့်နေသည်...',
   },
   orderDetail: {
