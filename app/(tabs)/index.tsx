@@ -83,6 +83,7 @@ export default function ProductsScreen() {
   const allProductsRef = useRef(allProducts);
   const partnerTagsRef = useRef(partnerTags);
   const tokenRef = useRef(token);
+  const catalogRequestIdRef = useRef(0);
   const initialLoadDoneRef = useRef(false);
   const skipNextCategorySyncRef = useRef(true);
   const showJustForYou = partnerTags.length > 0;
@@ -105,46 +106,6 @@ export default function ProductsScreen() {
 
   useEffect(() => {
     tokenRef.current = token;
-  }, [token]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!token) {
-      setPartnerTags([]);
-      setSelectedCategoryId((current) => (current === JUST_FOR_YOU ? null : current));
-      return;
-    }
-
-    fetchPartnerTags(token)
-      .then((tags) => {
-        if (cancelled) {
-          return;
-        }
-
-        setPartnerTags(tags);
-
-        if (!tags.length) {
-          setSelectedCategoryId((current) => (current === JUST_FOR_YOU ? null : current));
-          return;
-        }
-
-        // Default to Just for you when tags are available (app open / login).
-        setSelectedCategoryId(JUST_FOR_YOU);
-        selectedCategoryRef.current = JUST_FOR_YOU;
-        // Ensure the category sync effect runs for this default selection.
-        skipNextCategorySyncRef.current = false;
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPartnerTags([]);
-          setSelectedCategoryId((current) => (current === JUST_FOR_YOU ? null : current));
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
   }, [token]);
 
   const filterProductsLocally = useCallback(
@@ -172,6 +133,66 @@ export default function ProductsScreen() {
     },
     [],
   );
+
+  const applyCategorySelection = useCallback(
+    (selection: CategorySelection, options?: { skipSyncSkipFlag?: boolean }) => {
+      // Invalidate any in-flight catalog fetch so a stale All/Just-for-you
+      // response cannot overwrite the chip the user just picked.
+      catalogRequestIdRef.current += 1;
+      selectedCategoryRef.current = selection;
+      setSelectedCategoryId(selection);
+      setProducts(
+        filterProductsLocally(allProductsRef.current, selection, searchQueryRef.current),
+      );
+
+      if (options?.skipSyncSkipFlag) {
+        skipNextCategorySyncRef.current = false;
+      }
+    },
+    [filterProductsLocally],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!token) {
+      setPartnerTags([]);
+      setSelectedCategoryId((current) => (current === JUST_FOR_YOU ? null : current));
+      return;
+    }
+
+    fetchPartnerTags(token)
+      .then((tags) => {
+        if (cancelled) {
+          return;
+        }
+
+        setPartnerTags(tags);
+        partnerTagsRef.current = tags;
+
+        if (!tags.length) {
+          if (selectedCategoryRef.current === JUST_FOR_YOU) {
+            applyCategorySelection(null, { skipSyncSkipFlag: true });
+          }
+          return;
+        }
+
+        // Default to Just for you when tags are available (app open / login).
+        applyCategorySelection(JUST_FOR_YOU, { skipSyncSkipFlag: true });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPartnerTags([]);
+          if (selectedCategoryRef.current === JUST_FOR_YOU) {
+            applyCategorySelection(null, { skipSyncSkipFlag: true });
+          }
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, applyCategorySelection]);
 
   useEffect(() => {
     AsyncStorage.getItem(VIEW_MODE_KEY).then((stored) => {
@@ -205,6 +226,7 @@ export default function ProductsScreen() {
     const selection = selectedCategoryRef.current;
     const query = searchQueryRef.current.trim();
     const authToken = tokenRef.current;
+    const requestId = ++catalogRequestIdRef.current;
 
     if (!options?.silent) {
       setError('');
@@ -221,6 +243,15 @@ export default function ProductsScreen() {
       : fetchProducts(INITIAL_PRODUCT_LIMIT, 0, selection, authToken);
 
     const productsData = await productsPromise;
+
+    // Drop stale responses from a previous All / Just for you / search request.
+    if (requestId !== catalogRequestIdRef.current) {
+      return;
+    }
+
+    if (selectedCategoryRef.current !== selection || searchQueryRef.current.trim() !== query) {
+      return;
+    }
 
     if (!query && selection == null) {
       setAllProducts(productsData);
@@ -304,15 +335,10 @@ export default function ProductsScreen() {
     }
 
     const query = searchQueryRef.current.trim();
-    const hasLocalCache = allProductsRef.current.some((product) =>
-      Array.isArray(product.public_categ_ids),
-    );
-    const canFilterJustForYouLocally =
-      selectedCategoryId !== JUST_FOR_YOU ||
-      allProductsRef.current.some((product) => Array.isArray(product.tags));
 
-    // Category-only changes: filter instantly from cache, refresh in background.
-    if (!query && hasLocalCache && canFilterJustForYouLocally) {
+    // Always show the locally filtered list for the selected chip immediately.
+    // Never keep the previous chip's products while waiting for the API.
+    if (!query && allProductsRef.current.length > 0) {
       setProducts(
         filterProductsLocally(allProductsRef.current, selectedCategoryId, query),
       );
@@ -357,9 +383,12 @@ export default function ProductsScreen() {
     return () => subscription.remove();
   }, [syncCatalog]);
 
-  const handleCategorySelect = useCallback((categoryId: CategorySelection) => {
-    setSelectedCategoryId(categoryId);
-  }, []);
+  const handleCategorySelect = useCallback(
+    (categoryId: CategorySelection) => {
+      applyCategorySelection(categoryId);
+    },
+    [applyCategorySelection],
+  );
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -374,14 +403,14 @@ export default function ProductsScreen() {
         try {
           const tags = await fetchPartnerTags(tokenRef.current);
           setPartnerTags(tags);
+          partnerTagsRef.current = tags;
           nextSelection = tags.length ? JUST_FOR_YOU : null;
         } catch {
           nextSelection = partnerTagsRef.current.length ? JUST_FOR_YOU : null;
         }
       }
 
-      setSelectedCategoryId(nextSelection);
-      selectedCategoryRef.current = nextSelection;
+      applyCategorySelection(nextSelection);
       skipNextCategorySyncRef.current = true;
 
       await syncCatalog();
