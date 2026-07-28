@@ -46,6 +46,12 @@ app-example
 /ios
 /android
 
+# Local APK / IPA builds (too large for GitHub)
+*.apk
+*.aab
+*.ipa
+build-*.apk
+
 # Graphify (keep graph outputs; skip local-only cache)
 graphify-out/cache/
 graphify-out/manifest.json
