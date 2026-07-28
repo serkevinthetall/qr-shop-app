@@ -52,10 +52,8 @@ app-example
 *.ipa
 build-*.apk
 
-# Graphify (keep graph outputs; skip local-only cache)
-graphify-out/cache/
-graphify-out/manifest.json
-graphify-out/cost.json
+# Graphify local outputs (not part of the app)
+graphify-out/
 
 # Firebase / FCM private keys (never commit)
 credentials/
