@@ -60,9 +60,10 @@ export async function fetchProducts(
   return data.products;
 }
 
-export async function fetchProductById(id: number) {
+export async function fetchProductById(id: number, token?: string | null) {
   const { response, data } = await apiRequest<ProductResponse | ApiErrorResponse>(
     `/api/products/${id}`,
+    { token: token || undefined },
   );
 
   if (!response.ok || !data || !data.success) {

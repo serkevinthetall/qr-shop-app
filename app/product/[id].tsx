@@ -9,6 +9,7 @@ import { Image } from 'expo-image';
 
 import { AppToast } from '@/components/app-toast';
 import { useCart } from '@/contexts/cart-context';
+import { useAuth } from '@/contexts/auth-context';
 import { ProductRibbonBadge } from '@/components/products/product-ribbon';
 import { useLanguage } from '@/contexts/language-context';
 import { useAppColors } from '@/contexts/theme-context';
@@ -25,6 +26,7 @@ export default function ProductDetailScreen() {
   const colors = useAppColors();
   const { rs } = useResponsive();
   const { fs, lh, language } = useLanguage();
+  const { token } = useAuth();
   const { addToCart } = useCart();
   const { id } = useLocalSearchParams<{ id: string }>();
   const productId = Number(id);
@@ -85,7 +87,7 @@ export default function ProductDetailScreen() {
       }
 
       try {
-        const data = await fetchProductById(productId);
+        const data = await fetchProductById(productId, token);
 
         if (data.product) {
           rememberProductPreview(data.product);
@@ -107,7 +109,7 @@ export default function ProductDetailScreen() {
         setIsRefreshing(false);
       }
     },
-    [productId],
+    [productId, token],
   );
 
   useEffect(() => {

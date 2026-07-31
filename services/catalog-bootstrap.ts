@@ -77,7 +77,7 @@ export async function prefetchSessionBootstrap(token: string): Promise<SessionBo
 
   inflight = (async () => {
     const [products, categories, membershipResult, coupons, orders] = await Promise.all([
-      fetchProducts(INITIAL_PRODUCT_LIMIT, 0, null),
+      fetchProducts(INITIAL_PRODUCT_LIMIT, 0, null, token),
       fetchCategories().catch(() => [] as Category[]),
       fetchMembership(token).catch(() => ({ membership: null as Membership | null, memberCode: '' })),
       fetchMembershipCoupons(token).catch(() => [] as MembershipCoupon[]),
