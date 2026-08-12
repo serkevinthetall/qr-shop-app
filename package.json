@@ -27,6 +27,7 @@
     "@vercel/analytics": "^2.0.1",
     "babel-preset-expo": "~54.0.10",
     "expo": "~54.0.34",
+    "expo-build-properties": "^0.14.8",
     "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.13",
     "expo-dev-client": "~6.0.21",

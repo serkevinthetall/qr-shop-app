@@ -4,7 +4,10 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { loginWithApi, logoutFromApi } from '@/services/auth-api';
 import { clearSessionBootstrap } from '@/services/catalog-bootstrap';
 import { unregisterPushToken } from '@/services/notification-api';
+import { getExpoPushToken } from '@/services/device-notifications';
+import { registerPushForAuthSession } from '@/services/push-registration';
 import { trackLoginSuccess } from '@/services/analytics';
+import { useLanguage } from '@/contexts/language-context';
 
 const SESSION_KEY = 'qr-app-session';
 const TOKEN_KEY = 'qr-app-token';
@@ -37,6 +40,7 @@ function isValidEmail(email: string) {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const { language } = useLanguage();
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -106,6 +110,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: data.user,
       });
 
+      // Finish push setup during login loading so background alerts work
+      // before the user reaches the home screen.
+      await registerPushForAuthSession(data.token, language);
+
       // Track native app analytics only (Vercel Analytics is web-only).
       // Do not block login if analytics fails.
       await trackLoginSuccess({
@@ -115,13 +123,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return data.token;
     },
-    [persistSession],
+    [persistSession, language],
   );
 
   const signOut = useCallback(async () => {
     if (token) {
       try {
-        await unregisterPushToken(token);
+        const expoPushToken = await getExpoPushToken();
+        await unregisterPushToken(token, expoPushToken);
       } catch {
         // Continue logout even if push token cleanup fails.
       }

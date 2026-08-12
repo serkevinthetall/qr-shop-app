@@ -58,3 +58,7 @@ graphify-out/
 # Firebase / FCM private keys (never commit)
 credentials/
 *firebase-adminsdk*.json
+
+# Local EAS credentials export (contains secrets)
+credentials.json
+play-internal-testers.csv

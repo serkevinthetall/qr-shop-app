@@ -14,10 +14,21 @@
     "preview": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://qr-shop-app-backend.vercel.app"
+      }
+    },
+    "local-apk": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease -x lint -x lintVitalAnalyzeRelease -x lintVitalReportRelease -x lintVital"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://qr-shop-app-backend-git-staging-serkevin.vercel.app",
+        "ORG_GRADLE_JVMARGS": "-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8"
       }
     },
     "production": {

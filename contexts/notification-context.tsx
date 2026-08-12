@@ -6,7 +6,11 @@ import { translate, type Language } from '@/constants/translations';
 import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
 import { requestCatalogRefresh } from '@/services/catalog-events';
-import { presentLocalNotification, getExpoPushToken } from '@/services/device-notifications';
+import {
+  presentLocalNotification,
+  getExpoPushToken,
+  getExpoPushTokenWithRetry,
+} from '@/services/device-notifications';
 import {
   fetchNotifications,
   notificationDateToMs,
@@ -62,6 +66,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const isLanguageReadyRef = useRef(isLanguageReady);
   const seenIdsRef = useRef<Set<string> | null>(null);
   const tokenRef = useRef(token);
+  const pushSyncGenerationRef = useRef(0);
+  const lastRegisteredPushTokenRef = useRef<string | null>(null);
+  const syncPushRegistrationRef = useRef<(useRetry?: boolean) => Promise<boolean>>(
+    async () => false,
+  );
 
   useEffect(() => {
     tokenRef.current = token;
@@ -134,6 +143,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           if (shouldRefreshCatalog) {
             requestCatalogRefresh();
           }
+
+          // Permission / APNs may only become ready after a foreground alert —
+          // re-register so background push starts working without another login.
+          if (newItems.length > 0) {
+            syncPushRegistrationRef.current?.(false).catch(() => {});
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load notifications.');
@@ -154,30 +169,62 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     refresh();
   }, [refresh, isLanguageReady]);
 
-  const syncPushRegistration = useCallback(async () => {
+  const syncPushRegistration = useCallback(async (useRetry = true) => {
     const authToken = tokenRef.current;
+    const generation = pushSyncGenerationRef.current;
 
     if (!authToken || !isLanguageReadyRef.current) {
-      return;
+      return false;
     }
 
-    const expoPushToken = await getExpoPushToken();
+    const expoPushToken = useRetry
+      ? await getExpoPushTokenWithRetry()
+      : await getExpoPushToken();
+
+    if (generation !== pushSyncGenerationRef.current) {
+      return false;
+    }
 
     if (!expoPushToken) {
-      return;
+      return false;
     }
 
     await registerPushToken(authToken, expoPushToken, languageRef.current);
+
+    if (generation !== pushSyncGenerationRef.current) {
+      return false;
+    }
+
+    lastRegisteredPushTokenRef.current = expoPushToken;
+    return true;
   }, []);
 
   useEffect(() => {
+    syncPushRegistrationRef.current = syncPushRegistration;
+  }, [syncPushRegistration]);
+
+  useEffect(() => {
     if (!token || !isLanguageReady) {
+      pushSyncGenerationRef.current += 1;
+      lastRegisteredPushTokenRef.current = null;
       return;
     }
 
-    syncPushRegistration().catch((err) => {
-      console.warn('Push token registration failed:', err);
-    });
+    const generation = ++pushSyncGenerationRef.current;
+
+    syncPushRegistration(true)
+      .then((ok) => {
+        if (!ok && generation === pushSyncGenerationRef.current) {
+          console.warn('Push token registration did not complete after retries.');
+        }
+      })
+      .catch((err) => {
+        console.warn('Push token registration failed:', err);
+      });
+
+    return () => {
+      pushSyncGenerationRef.current += 1;
+    };
   }, [token, isLanguageReady, language, syncPushRegistration]);
 
   // Poll for new products/coupons while signed in, and re-check whenever the
@@ -194,7 +241,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         refresh(true);
-        syncPushRegistration().catch((err) => {
+        syncPushRegistration(true).catch((err) => {
           console.warn('Push token registration failed:', err);
         });
       }

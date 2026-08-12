@@ -32,6 +32,7 @@ async function loadNotifications(): Promise<NotificationsModule | null> {
 
     if (!handlerConfigured) {
       handlerConfigured = true;
+      // Foreground display only. Background/killed uses the OS + FCM channel.
       notificationsModule.setNotificationHandler({
         handleNotification: async () => ({
           shouldShowBanner: true,
@@ -54,12 +55,29 @@ async function ensureAndroidChannel(Notifications: NotificationsModule) {
     return;
   }
 
+  // MAX importance is required for heads-up banners while the app is backgrounded.
   await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
-    name: 'General',
-    importance: Notifications.AndroidImportance.HIGH,
+    name: 'QR Shop Alerts',
+    importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 250, 250, 250],
+    enableVibrate: true,
+    enableLights: true,
+    sound: 'default',
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    bypassDnd: false,
   });
+}
+
+/** Call once at app start so the Android channel exists before background pushes arrive. */
+export async function prepareNotificationChannels() {
+  const Notifications = await loadNotifications();
+
+  if (!Notifications) {
+    return false;
+  }
+
+  await ensureAndroidChannel(Notifications);
+  return true;
 }
 
 export async function ensureNotificationPermissions(): Promise<boolean> {
@@ -92,29 +110,101 @@ function getEasProjectId() {
 
 export async function getExpoPushToken(): Promise<string | null> {
   if (!isRemotePushAvailable()) {
+    console.warn('Push token skipped: Expo Go does not support remote push.');
     return null;
   }
 
   const Notifications = await loadNotifications();
 
   if (!Notifications) {
+    console.warn('Push token skipped: expo-notifications unavailable.');
     return null;
   }
 
   const granted = await ensureNotificationPermissions();
 
   if (!granted) {
+    console.warn('Push token skipped: notification permission not granted.');
     return null;
   }
 
   const projectId = getEasProjectId();
 
   if (!projectId) {
+    console.warn('Push token skipped: missing EAS projectId.');
     return null;
   }
 
-  const token = await Notifications.getExpoPushTokenAsync({ projectId });
-  return token.data;
+  try {
+    const token = await Notifications.getExpoPushTokenAsync({ projectId });
+    return token.data;
+  } catch (err) {
+    console.warn('getExpoPushTokenAsync failed:', err);
+    return null;
+  }
+}
+
+const PUSH_TOKEN_RETRY_DELAYS_MS = [0, 1000, 3000, 8000, 15000];
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * iOS often fails the first getExpoPushTokenAsync right after login / permission.
+ * Retry with backoff so background push can register without needing a foreground event.
+ */
+export async function getExpoPushTokenWithRetry(
+  delaysMs: number[] = PUSH_TOKEN_RETRY_DELAYS_MS,
+): Promise<string | null> {
+  for (let index = 0; index < delaysMs.length; index += 1) {
+    const delay = delaysMs[index];
+
+    if (delay > 0) {
+      await wait(delay);
+    }
+
+    const token = await getExpoPushToken();
+
+    if (token) {
+      return token;
+    }
+  }
+
+  return null;
+}
+
+export async function getPushDiagnostics() {
+  const available = isRemotePushAvailable();
+  const granted = available ? await ensureNotificationPermissions() : false;
+  const projectId = getEasProjectId();
+  let token: string | null = null;
+  let tokenError = '';
+
+  if (!available) {
+    tokenError = 'Expo Go cannot receive Play Store push. Install the Play Store / APK build.';
+  } else if (!granted) {
+    tokenError = 'Notification permission is not granted.';
+  } else if (!projectId) {
+    tokenError = 'Missing EAS project id.';
+  } else {
+    try {
+      token = await getExpoPushToken();
+      if (!token) {
+        tokenError = 'Could not create an Expo push token.';
+      }
+    } catch (err) {
+      tokenError = err instanceof Error ? err.message : 'Token request failed.';
+    }
+  }
+
+  return {
+    available,
+    granted,
+    projectId,
+    token,
+    tokenError,
+  };
 }
 
 export async function presentLocalNotification(

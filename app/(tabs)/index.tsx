@@ -30,7 +30,7 @@ import { takeCatalogBootstrap } from '@/services/catalog-bootstrap';
 import { onCatalogRefreshRequested } from '@/services/catalog-events';
 import { fetchPartnerTags } from '@/services/customer-api';
 import { rememberProductPreview } from '@/services/product-preview-cache';
-import { fetchCategories, fetchProducts, searchProducts } from '@/services/product-api';
+import { fetchCategories, fetchProductPrices, fetchProducts, searchProducts } from '@/services/product-api';
 import {
   JUST_FOR_YOU,
   productMatchesPartnerTags,
@@ -44,9 +44,8 @@ type ViewMode = 'grid' | 'list';
 const VIEW_MODE_KEY = 'qr-app-products-view-mode';
 const INITIAL_PRODUCT_LIMIT = 50;
 const SKELETON_LIST_COUNT = 6;
-// Gentle background sync while the products tab is open — updates ribbons/new items
-// without hammering the API or re-rendering when nothing changed.
-const CATALOG_POLL_INTERVAL_MS = 45000;
+// Full catalog refresh only on open/pull/focus. Background price checks are cheap.
+const PRICE_POLL_INTERVAL_MS = 30000;
 
 function readBootstrapSeed() {
   const seed = takeCatalogBootstrap();
@@ -61,7 +60,7 @@ export default function ProductsScreen() {
   const colors = useAppColors();
   const { rs, horizontalPadding, gridColumns, gridGap, width } = useResponsive();
   const { token } = useAuth();
-  const { addToCart } = useCart();
+  const { addToCart, syncPricesFromProducts } = useCart();
   const { t, lh } = useLanguage();
   const [bootstrapSeed] = useState(readBootstrapSeed);
   const [products, setProducts] = useState<Product[]>(bootstrapSeed.products);
@@ -86,6 +85,7 @@ export default function ProductsScreen() {
   const catalogRequestIdRef = useRef(0);
   const initialLoadDoneRef = useRef(false);
   const skipNextCategorySyncRef = useRef(true);
+  const priceVersionRef = useRef('');
   const showJustForYou = partnerTags.length > 0;
 
   useEffect(() => {
@@ -170,15 +170,10 @@ export default function ProductsScreen() {
         setPartnerTags(tags);
         partnerTagsRef.current = tags;
 
-        if (!tags.length) {
-          if (selectedCategoryRef.current === JUST_FOR_YOU) {
-            applyCategorySelection(null, { skipSyncSkipFlag: true });
-          }
-          return;
+        // Keep the user's current chip. Only leave Just for you if tags disappear.
+        if (!tags.length && selectedCategoryRef.current === JUST_FOR_YOU) {
+          applyCategorySelection(null, { skipSyncSkipFlag: true });
         }
-
-        // Default to Just for you when tags are available (app open / login).
-        applyCategorySelection(JUST_FOR_YOU, { skipSyncSkipFlag: true });
       })
       .catch(() => {
         if (!cancelled) {
@@ -238,39 +233,113 @@ export default function ProductsScreen() {
       setIsSearching(false);
     }
 
-    const productsPromise = query
-      ? searchProducts(query, selection, authToken)
-      : fetchProducts(INITIAL_PRODUCT_LIMIT, 0, selection, authToken);
+    if (query) {
+      const productsData = await searchProducts(query, selection, authToken);
 
-    const productsData = await productsPromise;
+      if (requestId !== catalogRequestIdRef.current) {
+        return;
+      }
 
-    // Drop stale responses from a previous All / Just for you / search request.
+      if (selectedCategoryRef.current !== selection || searchQueryRef.current.trim() !== query) {
+        return;
+      }
+
+      setProducts((previous) => mergeProductsIfChanged(previous, productsData));
+      return;
+    }
+
+    // Always refresh the full All catalog with the auth token so membership
+    // pricelist prices update without requiring logout. Also fetch the active
+    // chip (if any) so Just for you / category pages stay complete.
+    const allPromise = fetchProducts(INITIAL_PRODUCT_LIMIT, 0, null, authToken);
+    const selectedPromise =
+      selection == null ? allPromise : fetchProducts(INITIAL_PRODUCT_LIMIT, 0, selection, authToken);
+
+    const [allData, selectedData] = await Promise.all([allPromise, selectedPromise]);
+
     if (requestId !== catalogRequestIdRef.current) {
       return;
     }
 
-    if (selectedCategoryRef.current !== selection || searchQueryRef.current.trim() !== query) {
+    if (searchQueryRef.current.trim()) {
       return;
     }
 
-    if (!query && selection == null) {
-      setAllProducts(productsData);
-      allProductsRef.current = productsData;
-    } else if (!query && selection != null) {
-      // Merge filtered page into the local cache so later switches stay instant.
-      setAllProducts((previous) => {
-        const byId = new Map(previous.map((product) => [product.id, product]));
-        for (const product of productsData) {
-          byId.set(product.id, product);
-        }
-        const merged = [...byId.values()];
-        allProductsRef.current = merged;
-        return merged;
-      });
+    setAllProducts(allData);
+    allProductsRef.current = allData;
+    syncPricesFromProducts(allData);
+
+    for (const product of allData) {
+      rememberProductPreview(product);
     }
 
-    setProducts((previous) => mergeProductsIfChanged(previous, productsData));
-  }, [filterProductsLocally]);
+    const visible =
+      selectedCategoryRef.current == null
+        ? allData
+        : selectedCategoryRef.current === selection
+          ? selectedData
+          : filterProductsLocally(allData, selectedCategoryRef.current, '');
+
+    setProducts((previous) => mergeProductsIfChanged(previous, visible));
+  }, [filterProductsLocally, syncPricesFromProducts]);
+
+  const applyPriceUpdates = useCallback(
+    (prices: Array<{ id: number; list_price: number }>) => {
+      if (!prices.length) {
+        return;
+      }
+
+      const priceById = new Map(prices.map((row) => [row.id, row.list_price]));
+      let changed = false;
+
+      const nextAll = allProductsRef.current.map((product) => {
+        if (!priceById.has(product.id)) {
+          return product;
+        }
+
+        const nextPrice = priceById.get(product.id)!;
+        if (nextPrice === product.list_price) {
+          return product;
+        }
+
+        changed = true;
+        const updated = { ...product, list_price: nextPrice };
+        rememberProductPreview(updated);
+        return updated;
+      });
+
+      if (!changed) {
+        return;
+      }
+
+      allProductsRef.current = nextAll;
+      setAllProducts(nextAll);
+      syncPricesFromProducts(nextAll);
+      setProducts(
+        filterProductsLocally(
+          nextAll,
+          selectedCategoryRef.current,
+          searchQueryRef.current,
+        ),
+      );
+    },
+    [filterProductsLocally, syncPricesFromProducts],
+  );
+
+  const syncPrices = useCallback(async () => {
+    const snapshot = await fetchProductPrices(
+      tokenRef.current,
+      priceVersionRef.current || null,
+    );
+
+    priceVersionRef.current = snapshot.version;
+
+    if (snapshot.unchanged) {
+      return;
+    }
+
+    applyPriceUpdates(snapshot.prices);
+  }, [applyPriceUpdates]);
 
   // Keep categories warm and complete independently so the search dropdown
   // does not wait on product fetches / appear half-empty.
@@ -294,6 +363,15 @@ export default function ProductsScreen() {
         initialLoadDoneRef.current = true;
       });
   }, [syncCatalog]);
+
+  // Re-fetch with the auth token after login/logout so membership prices apply.
+  useEffect(() => {
+    if (!initialLoadDoneRef.current) {
+      return;
+    }
+
+    syncCatalog({ silent: true }).catch(() => {});
+  }, [token, syncCatalog]);
 
   useEffect(() => {
     syncCategories().catch(() => {});
@@ -362,26 +440,26 @@ export default function ProductsScreen() {
   useFocusEffect(
     useCallback(() => {
       if (initialLoadDoneRef.current) {
-        syncCatalog({ silent: true }).catch(() => {});
+        syncPrices().catch(() => {});
       }
 
       const intervalId = setInterval(() => {
-        syncCatalog({ silent: true }).catch(() => {});
-      }, CATALOG_POLL_INTERVAL_MS);
+        syncPrices().catch(() => {});
+      }, PRICE_POLL_INTERVAL_MS);
 
       return () => clearInterval(intervalId);
-    }, [syncCatalog]),
+    }, [syncPrices]),
   );
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        syncCatalog({ silent: true }).catch(() => {});
+        syncPrices().catch(() => {});
       }
     });
 
     return () => subscription.remove();
-  }, [syncCatalog]);
+  }, [syncPrices]);
 
   const handleCategorySelect = useCallback(
     (categoryId: CategorySelection) => {
@@ -397,22 +475,22 @@ export default function ProductsScreen() {
     setError('');
 
     try {
-      let nextSelection: CategorySelection = null;
-
+      // Keep the current chip; only refresh partner tags in the background.
       if (tokenRef.current) {
         try {
           const tags = await fetchPartnerTags(tokenRef.current);
           setPartnerTags(tags);
           partnerTagsRef.current = tags;
-          nextSelection = tags.length ? JUST_FOR_YOU : null;
+
+          if (!tags.length && selectedCategoryRef.current === JUST_FOR_YOU) {
+            applyCategorySelection(null, { skipSyncSkipFlag: true });
+          }
         } catch {
-          nextSelection = partnerTagsRef.current.length ? JUST_FOR_YOU : null;
+          // Keep existing tags/selection if refresh fails.
         }
       }
 
-      applyCategorySelection(nextSelection);
       skipNextCategorySyncRef.current = true;
-
       await syncCatalog();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh products.');

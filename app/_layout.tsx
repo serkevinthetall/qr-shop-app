@@ -23,6 +23,9 @@ import { getAppColors } from '@/constants/app-colors';
 import { MYANMAR_FONTS } from '@/constants/fonts';
 import { NotificationBootstrap } from '@/components/notification-bootstrap';
 import { OfflineNotice } from '@/components/offline-notice';
+import { ForceUpdateModal } from '@/components/force-update-modal';
+import { ServerDownNotice } from '@/components/server-down-notice';
+import { AppStatusProvider } from '@/contexts/app-status-context';
 import { AuthProvider } from '@/contexts/auth-context';
 import { CartProvider } from '@/contexts/cart-context';
 import { LanguageProvider, useLanguage } from '@/contexts/language-context';
@@ -102,6 +105,8 @@ function RootNavigator() {
       <NavigationThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
         <NotificationBootstrap />
         <OfflineNotice />
+        <ServerDownNotice />
+        <ForceUpdateModal />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="welcome" />
@@ -149,13 +154,15 @@ export default function RootLayout() {
       <ThemeProvider>
         <LanguageProvider>
           <NetworkProvider>
-            <AuthProvider>
-              <NotificationProvider>
-                <CartProvider>
-                  <RootNavigator />
-                </CartProvider>
-              </NotificationProvider>
-            </AuthProvider>
+            <AppStatusProvider>
+              <AuthProvider>
+                <NotificationProvider>
+                  <CartProvider>
+                    <RootNavigator />
+                  </CartProvider>
+                </NotificationProvider>
+              </AuthProvider>
+            </AppStatusProvider>
           </NetworkProvider>
         </LanguageProvider>
       </ThemeProvider>
