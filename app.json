@@ -10,7 +10,11 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.qrshop.myanmar"
+      "bundleIdentifier": "com.qrshop.myanmar",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.qrshop.myanmar",
@@ -36,6 +40,14 @@
     "plugins": [
       "expo-router",
       [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Allow QR App to access your photos to upload payment screenshots."
@@ -57,11 +69,13 @@
       [
         "expo-notifications",
         {
-          "defaultChannel": "default"
+          "defaultChannel": "default",
+          "sounds": []
         }
       ],
       "@react-native-firebase/app",
-      "@react-native-firebase/analytics"
+      "@react-native-firebase/analytics",
+      "./plugins/with-rnfb-ios-fix.js"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -66,12 +66,13 @@ export async function registerPushToken(token: string, expoPushToken: string, la
   }
 }
 
-export async function unregisterPushToken(token: string) {
+export async function unregisterPushToken(token: string, expoPushToken?: string | null) {
   const { response, data } = await apiRequest<{ success: boolean; message?: string } | ApiErrorResponse>(
     '/api/notifications/register-token',
     {
       method: 'DELETE',
       token,
+      body: expoPushToken ? { expo_push_token: expoPushToken } : {},
     },
   );
 
@@ -92,6 +93,40 @@ export async function sendTestPush(token: string) {
   if (!response.ok || !data?.success) {
     throw new Error(getApiError(data, 'Failed to send test push.'));
   }
+}
+
+export type PushStatus = {
+  partner_id: number;
+  saved_on_server: boolean;
+  token_count: number;
+  token_preview: string | null;
+  webhook_secret_configured: boolean;
+};
+
+export async function fetchPushStatus(token: string): Promise<PushStatus> {
+  const { response, data } = await apiRequest<
+    | ({
+        success: true;
+        partner_id: number;
+        saved_on_server: boolean;
+        token_count: number;
+        token_preview: string | null;
+        webhook_secret_configured: boolean;
+      })
+    | ApiErrorResponse
+  >('/api/notifications/push-status', { token });
+
+  if (!response.ok || !data || data.success !== true) {
+    throw new Error(getApiError(data, 'Failed to load push status.'));
+  }
+
+  return {
+    partner_id: data.partner_id,
+    saved_on_server: data.saved_on_server,
+    token_count: data.token_count,
+    token_preview: data.token_preview,
+    webhook_secret_configured: data.webhook_secret_configured,
+  };
 }
 
 // Odoo datetimes arrive as "YYYY-MM-DD HH:MM:SS" in UTC. Convert to epoch ms so

@@ -19,6 +19,7 @@ type CartContextValue = {
   removeFromCart: (productId: number) => void;
   updateQuantity: (productId: number, quantity: number) => void;
   clearCart: () => void;
+  syncPricesFromProducts: (products: Product[]) => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -96,6 +97,37 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems([]);
   }, []);
 
+  const syncPricesFromProducts = useCallback((products: Product[]) => {
+    if (!products.length) {
+      return;
+    }
+
+    const priceById = new Map(products.map((product) => [product.id, product]));
+
+    setItems((current) => {
+      let changed = false;
+
+      const next = current.map((item) => {
+        const updated = priceById.get(item.product.id);
+
+        if (!updated || updated.list_price === item.product.list_price) {
+          return item;
+        }
+
+        changed = true;
+        return {
+          ...item,
+          product: {
+            ...item.product,
+            list_price: updated.list_price,
+          },
+        };
+      });
+
+      return changed ? next : current;
+    });
+  }, []);
+
   const totalItems = useMemo(
     () => items.reduce((sum, item) => sum + item.quantity, 0),
     [items],
@@ -115,8 +147,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       removeFromCart,
       updateQuantity,
       clearCart,
+      syncPricesFromProducts,
     }),
-    [items, totalItems, totalAmount, addToCart, removeFromCart, updateQuantity, clearCart],
+    [
+      items,
+      totalItems,
+      totalAmount,
+      addToCart,
+      removeFromCart,
+      updateQuantity,
+      clearCart,
+      syncPricesFromProducts,
+    ],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

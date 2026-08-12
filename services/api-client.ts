@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '@/constants/api';
 import { getInvalidResponseMessage, getNetworkErrorMessage } from '@/services/network-error';
+import { emitServerDown } from '@/services/server-status-events';
 
 type ApiRequestOptions = {
   method?: string;
@@ -36,6 +37,10 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
       signal: controller.signal,
     });
 
+    if (response.status >= 500) {
+      emitServerDown();
+    }
+
     const rawText = await response.text();
     let data: T | null = null;
 
@@ -49,6 +54,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 
     return { response, data: data as T };
   } catch (error) {
+    emitServerDown();
     throw new Error(getNetworkErrorMessage(error));
   } finally {
     clearTimeout(timeoutId);

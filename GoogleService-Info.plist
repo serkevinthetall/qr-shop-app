@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>AIzaSyCPw8KnUVXWsECrsfrlPtcXKPfkRz2O-eY</string>
+	<key>GCM_SENDER_ID</key>
+	<string>527593320319</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.qrshop.myanmar</string>
+	<key>PROJECT_ID</key>
+	<string>qr-shop-myanmar</string>
+	<key>STORAGE_BUCKET</key>
+	<string>qr-shop-myanmar.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:527593320319:ios:62ecb8d3e8f90cad99344a</string>
+</dict>
+</plist>
