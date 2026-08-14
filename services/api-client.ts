@@ -1,6 +1,10 @@
 import { API_BASE_URL } from '@/constants/api';
 import { getInvalidResponseMessage, getNetworkErrorMessage } from '@/services/network-error';
-import { emitServerDown } from '@/services/server-status-events';
+import {
+  emitServerDown,
+  shouldEmitServerDownFromError,
+  shouldEmitServerDownFromStatus,
+} from '@/services/server-status-events';
 
 type ApiRequestOptions = {
   method?: string;
@@ -37,7 +41,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
       signal: controller.signal,
     });
 
-    if (response.status >= 500) {
+    if (shouldEmitServerDownFromStatus(response.status)) {
       emitServerDown();
     }
 
@@ -54,7 +58,9 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 
     return { response, data: data as T };
   } catch (error) {
-    emitServerDown();
+    if (shouldEmitServerDownFromError(error)) {
+      emitServerDown();
+    }
     throw new Error(getNetworkErrorMessage(error));
   } finally {
     clearTimeout(timeoutId);

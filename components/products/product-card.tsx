@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { useRef } from 'react';
 import { Animated, LayoutAnimation, Platform, StyleSheet, Text, UIManager, View } from 'react-native';
+import { QuantityStepper } from '@/components/quantity-stepper';
 import { Button, IconButton } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -176,16 +177,14 @@ export function ProductListItem({ product, onAddToCart }: ProductListItemProps) 
 type CartLineItemProps = {
   product: Product;
   quantity: number;
-  onIncrease: () => void;
-  onDecrease: () => void;
+  onQuantityChange: (quantity: number) => void;
   onRemove: () => void;
 };
 
 export function CartLineItem({
   product,
   quantity,
-  onIncrease,
-  onDecrease,
+  onQuantityChange,
   onRemove,
 }: CartLineItemProps) {
   const colors = useAppColors();
@@ -209,12 +208,8 @@ export function CartLineItem({
     });
   };
 
-  const handleDecrease = () => {
-    if (quantity <= 1) {
-      animateAndRemove();
-    } else {
-      onDecrease();
-    }
+  const handleDecreaseAtMin = () => {
+    animateAndRemove();
   };
 
   return (
@@ -250,23 +245,16 @@ export function CartLineItem({
             {formatPrice(product.list_price * quantity)}
           </Text>
 
-          <View style={[styles.stepper, { borderColor: colors.border, backgroundColor: colors.inputBg }]}>
-            <IconButton
-              icon="minus"
-              size={16}
-              onPress={handleDecrease}
-              iconColor={colors.text}
-              style={styles.stepperButton}
-            />
-            <Text style={[styles.stepperText, { color: colors.text, fontSize: rs(15) }]}>{quantity}</Text>
-            <IconButton
-              icon="plus"
-              size={16}
-              onPress={onIncrease}
-              iconColor={colors.text}
-              style={styles.stepperButton}
-            />
-          </View>
+          <QuantityStepper
+            value={quantity}
+            onChange={onQuantityChange}
+            onDecreaseAtMin={handleDecreaseAtMin}
+            fontSize={rs(15)}
+            iconSize={16}
+            borderColor={colors.border}
+            backgroundColor={colors.inputBg}
+            textColor={colors.text}
+          />
         </View>
       </View>
     </Animated.View>
@@ -377,8 +365,9 @@ const styles = StyleSheet.create({
   },
   trashButton: {
     margin: 0,
-    marginTop: -6,
-    marginRight: -6,
+    marginTop: -4,
+    width: 36,
+    height: 36,
   },
   cartPrice: {
     fontWeight: '700',
@@ -388,19 +377,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  stepperButton: {
-    margin: 0,
-  },
-  stepperText: {
-    minWidth: 28,
-    textAlign: 'center',
-    fontWeight: '700',
   },
 });

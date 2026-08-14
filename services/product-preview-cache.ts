@@ -13,3 +13,7 @@ export function getProductPreview(id: number) {
 export function clearProductPreview(id: number) {
   cache.delete(id);
 }
+
+export function clearProductPreviewCache() {
+  cache.clear();
+}
