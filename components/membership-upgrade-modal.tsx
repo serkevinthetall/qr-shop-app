@@ -30,7 +30,7 @@ export function MembershipUpgradeModal({
 }: MembershipUpgradeModalProps) {
   const colors = useAppColors();
   const { rs } = useResponsive();
-  const { t, fs, lh } = useLanguage();
+  const { t, fs } = useLanguage();
   const [previewPlan, setPreviewPlan] = useState<UpgradePlan>('pro');
 
   useEffect(() => {
@@ -78,7 +78,7 @@ export function MembershipUpgradeModal({
             },
           ]}>
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.text, fontSize: fs(rs(17)), lineHeight: lh(17) }]}>
+            <Text style={[styles.title, { color: colors.text, fontSize: fs(rs(17)) }]}>
               {t('account.upgradeChooseTitle')}
             </Text>
             <Pressable
@@ -108,7 +108,6 @@ export function MembershipUpgradeModal({
                     {
                       color: activePlan === 'pro' ? colors.onPrimary : colors.text,
                       fontSize: fs(rs(14)),
-                      lineHeight: lh(14),
                     },
                   ]}>
                   {t('account.memberStatusPro')}
@@ -129,7 +128,6 @@ export function MembershipUpgradeModal({
                     {
                       color: activePlan === 'premium' ? colors.onPrimary : colors.text,
                       fontSize: fs(rs(14)),
-                      lineHeight: lh(14),
                     },
                   ]}>
                   {t('account.memberStatusPremium')}
@@ -138,16 +136,12 @@ export function MembershipUpgradeModal({
             </View>
 
             <View style={[styles.planBox, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-              <Text style={[styles.planBoxTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
+              <Text style={[styles.planBoxTitle, { color: colors.text, fontSize: fs(rs(16)) }]}>
                 {activePlan === 'pro' ? t('account.upgradeProTitle') : t('account.upgradePremiumTitle')}
               </Text>
 
               <View style={[styles.priceChip, { backgroundColor: colors.primaryMuted }]}>
-                <Text
-                  style={[
-                    styles.priceChipText,
-                    { color: colors.primary, fontSize: fs(rs(13)), lineHeight: lh(13) },
-                  ]}>
+                <Text style={[styles.priceChipText, { color: colors.primary, fontSize: fs(rs(13)) }]}>
                   {planPrice}
                 </Text>
               </View>
@@ -155,11 +149,7 @@ export function MembershipUpgradeModal({
               {benefits.map((benefit) => (
                 <View key={benefit} style={styles.benefitRow}>
                   <MaterialCommunityIcons name="check-circle" size={18} color={colors.primary} style={styles.benefitIcon} />
-                  <Text
-                    style={[
-                      styles.benefitText,
-                      { color: colors.text, fontSize: fs(rs(13)), lineHeight: lh(13) ?? rs(22) },
-                    ]}>
+                  <Text style={[styles.benefitText, { color: colors.text, fontSize: fs(rs(13)) }]}>
                     {benefit}
                   </Text>
                 </View>
@@ -174,7 +164,7 @@ export function MembershipUpgradeModal({
               disabled={isSubmitting}
               style={styles.submitButton}
               contentStyle={styles.submitButtonContent}
-              labelStyle={[styles.submitLabel, { fontSize: fs(rs(15)), lineHeight: lh(15) }]}>
+              labelStyle={[styles.submitLabel, { fontSize: fs(rs(15)) }]}>
               {t('account.upgradeSubmit')}
             </Button>
           </View>
@@ -255,9 +245,11 @@ const styles = StyleSheet.create({
   priceChip: {
     alignSelf: 'center',
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 12,
     marginBottom: 8,
+    overflow: 'visible',
   },
   priceChipText: {
     fontWeight: '700',
@@ -268,10 +260,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
     marginTop: 16,
-    paddingVertical: 2,
+    paddingTop: 2,
+    paddingBottom: 4,
   },
   benefitIcon: {
-    marginTop: 2,
+    marginTop: 3,
   },
   benefitText: {
     flex: 1,
@@ -282,7 +275,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   submitButtonContent: {
-    height: 50,
+    height: 52,
     flexDirection: 'row-reverse',
   },
   submitLabel: {
