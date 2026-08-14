@@ -417,7 +417,7 @@ const my: TranslationTree = {
     memberStatusRegistered: 'မှတ်ပုံတင်အဖွဲ့ဝင်',
     memberStatusPro: 'Pro',
     memberStatusPremium: 'Premium',
-    upgrade: '🎁 အဖွဲ့ဝင်စားခွင့် ရယူပါ',
+    upgrade: '🎁 အဖွဲ့ဝင်ခံစားခွင့် ရယူပါ',
     upgradeUnlockCoupons: 'ကူပွန်နှင့် Commission အကျိုးခံစားခွင့်များ ရယူရန် အဖွဲ့ဝင်အဆင့်ကို မြှင့်တင်ပါ။',
     upgradeChooseTitle: 'အဖွဲ့ဝင်အဆင့် ရွေးချယ်ပါ',
     upgradeCheckInfoTitle: 'သင့်အချက်အလက်များကို စစ်ဆေးပါ',
