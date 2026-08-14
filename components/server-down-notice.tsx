@@ -1,21 +1,61 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import Constants from 'expo-constants';
+import { useRouter, type Href } from 'expo-router';
+import { useState } from 'react';
+import { BackHandler, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppStatus } from '@/contexts/app-status-context';
+import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
 import { useNetwork } from '@/contexts/network-context';
 import { useAppColors } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 
+async function quitSession(signOut: () => Promise<void>, goLogin: () => void) {
+  try {
+    await signOut();
+  } catch {
+    // Continue navigation even if logout API fails.
+  }
+
+  goLogin();
+
+  const inExpoGo = Constants.appOwnership === 'expo';
+
+  if (Platform.OS === 'android' && !inExpoGo) {
+    BackHandler.exitApp();
+  }
+}
+
 /** Shown when the device is online but the QR Shop API is unreachable. */
 export function ServerDownNotice() {
+  const router = useRouter();
   const colors = useAppColors();
   const { rs } = useResponsive();
   const { t, fs, lh } = useLanguage();
+  const { signOut } = useAuth();
   const { isOnline } = useNetwork();
-  const { serverDown, forceUpdateRequired, isChecking, refreshStatus } = useAppStatus();
+  const { serverDown, forceUpdateRequired, isChecking, refreshStatus, dismissServerDown } = useAppStatus();
+  const [isQuitting, setIsQuitting] = useState(false);
 
   const visible = serverDown && isOnline && !forceUpdateRequired;
+
+  const handleQuit = async () => {
+    if (isQuitting) {
+      return;
+    }
+
+    setIsQuitting(true);
+    dismissServerDown();
+
+    try {
+      await quitSession(signOut, () => {
+        router.replace('/login' as Href);
+      });
+    } finally {
+      setIsQuitting(false);
+    }
+  };
 
   return (
     <Modal
@@ -23,7 +63,7 @@ export function ServerDownNotice() {
       transparent
       animationType="fade"
       onRequestClose={() => {
-        // Keep visible until the server responds again.
+        handleQuit().catch(() => {});
       }}>
       <View
         style={[
@@ -52,23 +92,45 @@ export function ServerDownNotice() {
             {t('network.serverDownBody')}
           </Text>
 
-          <Pressable
-            onPress={() => {
-              refreshStatus().catch(() => {});
-            }}
-            disabled={isChecking}
-            style={[
-              styles.button,
-              {
-                backgroundColor: colors.primary,
-                opacity: isChecking ? 0.7 : 1,
-              },
-            ]}
-            accessibilityRole="button">
-            <Text style={[styles.buttonText, { color: colors.onPrimary, fontSize: fs(14) }]}>
-              {isChecking ? '...' : t('network.tryAgain')}
-            </Text>
-          </Pressable>
+          <View style={styles.actions}>
+            <Pressable
+              onPress={() => {
+                refreshStatus().catch(() => {});
+              }}
+              disabled={isChecking || isQuitting}
+              style={[
+                styles.actionButton,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: isChecking || isQuitting ? 0.7 : 1,
+                },
+              ]}
+              accessibilityRole="button">
+              <Text style={[styles.actionText, { color: colors.onPrimary, fontSize: fs(14) }]}>
+                {isChecking ? '...' : t('network.retry')}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                handleQuit().catch(() => {});
+              }}
+              disabled={isQuitting}
+              style={[
+                styles.actionButton,
+                styles.quitButton,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.inputBg,
+                  opacity: isQuitting ? 0.7 : 1,
+                },
+              ]}
+              accessibilityRole="button">
+              <Text style={[styles.actionText, { color: colors.text, fontSize: fs(14) }]}>
+                {isQuitting ? '...' : t('network.quit')}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </Modal>
@@ -114,14 +176,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
   },
-  button: {
-    minWidth: 120,
+  actions: {
+    width: '100%',
+    gap: 10,
+  },
+  actionButton: {
+    width: '100%',
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 999,
     alignItems: 'center',
   },
-  buttonText: {
+  quitButton: {
+    borderWidth: 1,
+  },
+  actionText: {
     fontWeight: '700',
   },
 });

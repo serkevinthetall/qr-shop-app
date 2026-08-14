@@ -12,6 +12,9 @@ import React, {
 type NetworkContextValue = {
   isOnline: boolean;
   isChecking: boolean;
+  /** True when offline is forced by the Account status-test panel. */
+  simulateOffline: boolean;
+  setSimulateOffline: (value: boolean) => void;
   refresh: () => Promise<boolean>;
 };
 
@@ -31,7 +34,8 @@ function resolveOnline(state: NetInfoState) {
 }
 
 export function NetworkProvider({ children }: { children: React.ReactNode }) {
-  const [isOnline, setIsOnline] = useState(true);
+  const [realOnline, setRealOnline] = useState(true);
+  const [simulateOffline, setSimulateOffline] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const mountedRef = useRef(true);
 
@@ -42,12 +46,12 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
       if (!mountedRef.current) {
         return;
       }
-      setIsOnline(resolveOnline(state));
+      setRealOnline(resolveOnline(state));
     };
 
     NetInfo.fetch().then(apply).catch(() => {
       if (mountedRef.current) {
-        setIsOnline(false);
+        setRealOnline(false);
       }
     });
 
@@ -62,25 +66,31 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     setIsChecking(true);
     try {
+      // Clear test override so Try Again can recover during status testing.
+      setSimulateOffline(false);
       const state = await NetInfo.fetch();
       const online = resolveOnline(state);
-      setIsOnline(online);
+      setRealOnline(online);
       return online;
     } catch {
-      setIsOnline(false);
+      setRealOnline(false);
       return false;
     } finally {
       setIsChecking(false);
     }
   }, []);
 
+  const isOnline = realOnline && !simulateOffline;
+
   const value = useMemo(
     () => ({
       isOnline,
       isChecking,
+      simulateOffline,
+      setSimulateOffline,
       refresh,
     }),
-    [isOnline, isChecking, refresh],
+    [isOnline, isChecking, simulateOffline, refresh],
   );
 
   return <NetworkContext.Provider value={value}>{children}</NetworkContext.Provider>;

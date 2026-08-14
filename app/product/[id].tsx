@@ -1,13 +1,15 @@
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, IconButton } from 'react-native-paper';
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Button } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 
 import { AppToast } from '@/components/app-toast';
+import { ProductDetailSkeleton, SimilarProductsSkeleton } from '@/components/products/product-card-skeleton';
+import { QuantityStepper } from '@/components/quantity-stepper';
 import { useCart } from '@/contexts/cart-context';
 import { useAuth } from '@/contexts/auth-context';
 import { ProductRibbonBadge } from '@/components/products/product-ribbon';
@@ -39,6 +41,7 @@ export default function ProductDetailScreen() {
           longDescription: 'အသေးစိတ် ဖော်ပြချက်',
           internalNotes: 'အတွင်းမှတ်ချက်',
           noDescription: 'ဖော်ပြချက် မရှိပါ။',
+          loadingDescription: 'ဖော်ပြချက် ရယူနေသည်…',
           similar: 'ဆင်တူ ပစ္စည်းများ',
           addToCart: 'ခြင်းထဲ ထည့်ရန်',
           notFound: 'ပစ္စည်း မတွေ့ပါ။',
@@ -50,6 +53,7 @@ export default function ProductDetailScreen() {
           longDescription: 'Long Description',
           internalNotes: 'Internal Notes',
           noDescription: 'No description available.',
+          loadingDescription: 'Loading description…',
           similar: 'Similar Products',
           addToCart: 'Add to Cart',
           notFound: 'Product not found.',
@@ -57,13 +61,15 @@ export default function ProductDetailScreen() {
         };
 
   const languageRef = useRef(language);
+  const requestGenerationRef = useRef(0);
   const [product, setProduct] = useState<Product | null>(() =>
     Number.isFinite(productId) ? getProductPreview(productId) : null,
   );
   const [similar, setSimilar] = useState<Product[]>([]);
+  const [similarLoading, setSimilarLoading] = useState(false);
+  const [detailsLoaded, setDetailsLoaded] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [isLoading, setIsLoading] = useState(() => !getProductPreview(productId));
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [snackbar, setSnackbar] = useState('');
 
@@ -77,36 +83,72 @@ export default function ProductDetailScreen() {
         return;
       }
 
-      const hasPreview = !!getProductPreview(productId);
+      const generation = ++requestGenerationRef.current;
+      const preview = getProductPreview(productId);
+      const hasPreview = !!preview;
 
       if (!options?.silent && !hasPreview) {
         setIsLoading(true);
         setError('');
-      } else if (options?.silent && hasPreview) {
-        setIsRefreshing(true);
+        setSimilar([]);
       }
 
-      try {
-        const data = await fetchProductById(productId, token);
+      setSimilarLoading(true);
 
-        if (data.product) {
-          rememberProductPreview(data.product);
-          setProduct(data.product);
+      try {
+        // Phase 1: product only (skip similar) so the screen can open quickly.
+        const fast = await fetchProductById(productId, token, { similarLimit: 0 });
+
+        if (generation !== requestGenerationRef.current) {
+          return;
+        }
+
+        if (fast.product) {
+          rememberProductPreview(fast.product);
+          setProduct(fast.product);
+          setDetailsLoaded(true);
+          setIsLoading(false);
         } else if (!options?.silent && !hasPreview) {
           setProduct(null);
           setError(
             languageRef.current === 'my' ? 'ပစ္စည်း မတွေ့ပါ။' : 'Product not found.',
           );
+          setDetailsLoaded(true);
+          setIsLoading(false);
+          setSimilarLoading(false);
+          return;
+        } else {
+          setDetailsLoaded(true);
+          setIsLoading(false);
         }
 
-        setSimilar(data.similarProducts.filter((item) => item.id !== data.product?.id));
+        // Phase 2: similar products in the background.
+        const full = await fetchProductById(productId, token, { similarLimit: 6 });
+
+        if (generation !== requestGenerationRef.current) {
+          return;
+        }
+
+        if (full.product) {
+          rememberProductPreview(full.product);
+          setProduct(full.product);
+        }
+
+        setSimilar(full.similarProducts.filter((item) => item.id !== full.product?.id));
       } catch (err) {
-        if (!options?.silent && !hasPreview) {
+        if (generation !== requestGenerationRef.current) {
+          return;
+        }
+
+        if (!options?.silent && !hasPreview && !getProductPreview(productId)) {
           setError(err instanceof Error ? err.message : 'Failed to load product.');
         }
       } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
+        if (generation === requestGenerationRef.current) {
+          setIsLoading(false);
+          setSimilarLoading(false);
+          setDetailsLoaded(true);
+        }
       }
     },
     [productId, token],
@@ -114,6 +156,9 @@ export default function ProductDetailScreen() {
 
   useEffect(() => {
     setQuantity(1);
+    setSimilar([]);
+    setSimilarLoading(true);
+    setDetailsLoaded(false);
 
     const preview = getProductPreview(productId);
 
@@ -125,7 +170,7 @@ export default function ProductDetailScreen() {
       setIsLoading(true);
     }
 
-    loadProduct({ silent: !!preview });
+    loadProduct({ silent: !!preview }).catch(() => {});
   }, [productId, loadProduct]);
 
   useEffect(() => {
@@ -143,6 +188,7 @@ export default function ProductDetailScreen() {
       return;
     }
 
+    Keyboard.dismiss();
     addToCart(product, quantity);
     setSnackbar(labels.added);
   };
@@ -153,11 +199,7 @@ export default function ProductDetailScreen() {
   };
 
   if (isLoading && !product) {
-    return (
-      <SafeAreaView style={[styles.centered, { backgroundColor: colors.background }]} edges={['top']}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </SafeAreaView>
-    );
+    return <ProductDetailSkeleton onBack={() => router.back()} />;
   }
 
   if (!product) {
@@ -188,145 +230,158 @@ export default function ProductDetailScreen() {
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      <View style={[styles.headerBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.back()} style={styles.iconButton}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text
-          style={[styles.headerTitle, { color: colors.text, fontSize: fs(18), lineHeight: lh(18) }]}
-          numberOfLines={1}>
-          {product.name}
-        </Text>
-        <View style={styles.headerSpacer}>
-          {isRefreshing ? <ActivityIndicator size="small" color={colors.primary} /> : null}
-        </View>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={[styles.imageWrap, { backgroundColor: colors.inputBg }]}>
-          <Image
-            source={{ uri: getProductImageUri(product) }}
-            cacheKey={imageCacheKey}
-            style={styles.image}
-            contentFit="cover"
-            transition={200}
-          />
-          {product.ribbon ? <ProductRibbonBadge ribbon={product.ribbon} /> : null}
-        </View>
-
-        <Text style={[styles.title, { color: colors.text, fontSize: fs(22), lineHeight: lh(22) }]}>
-          {product.name}
-        </Text>
-        <Text style={[styles.price, { color: colors.primary, fontSize: fs(22) }]}>
-          {formatPrice(product.list_price)}
-        </Text>
-
-        <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16) }]}>
-          {labels.description}
-        </Text>
-
-        {longDescription || internalNotes ? (
-          <>
-            {longDescription ? (
-              <View style={styles.descriptionBlock}>
-                {internalNotes ? (
-                  <Text style={[styles.descriptionSubtitle, { color: colors.text, fontSize: fs(14), lineHeight: lh(14) }]}>
-                    {labels.longDescription}
-                  </Text>
-                ) : null}
-                <Text style={[styles.description, { color: colors.textMuted, fontSize: fs(14), lineHeight: lh(14) }]}>
-                  {longDescription}
-                </Text>
-              </View>
-            ) : null}
-
-            {internalNotes ? (
-              <View style={[styles.descriptionBlock, longDescription ? styles.descriptionBlockSpaced : null]}>
-                <Text style={[styles.descriptionSubtitle, { color: colors.text, fontSize: fs(14), lineHeight: lh(14) }]}>
-                  {labels.internalNotes}
-                </Text>
-                <Text style={[styles.description, { color: colors.textMuted, fontSize: fs(14), lineHeight: lh(14) }]}>
-                  {internalNotes}
-                </Text>
-              </View>
-            ) : null}
-          </>
-        ) : (
-          <Text style={[styles.description, { color: colors.textMuted, fontSize: fs(14), lineHeight: lh(14) }]}>
-            {description || labels.noDescription}
+      <KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}>
+        <View style={[styles.headerBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <Pressable onPress={() => router.back()} style={styles.iconButton}>
+            <MaterialIcons name="arrow-back" size={24} color={colors.text} />
+          </Pressable>
+          <Text
+            style={[styles.headerTitle, { color: colors.text, fontSize: fs(18), lineHeight: lh(18) }]}
+            numberOfLines={1}>
+            {product.name}
           </Text>
-        )}
-
-        {similar.length > 0 ? (
-          <>
-            <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16) }]}>
-              {labels.similar}
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.similarRow}>
-              {similar.map((item) => (
-                <Pressable
-                  key={item.id}
-                  onPress={() => openSimilarProduct(item)}
-                  style={[styles.similarCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <View style={[styles.similarImageWrap, { backgroundColor: colors.inputBg }]}>
-                    <Image
-                      source={{ uri: getProductImageUri(item) }}
-                      cacheKey={getProductImageCacheKey(item)}
-                      style={styles.image}
-                      contentFit="cover"
-                      transition={200}
-                    />
-                    {item.ribbon ? <ProductRibbonBadge ribbon={item.ribbon} /> : null}
-                  </View>
-                  <View style={styles.similarBody}>
-                    <Text
-                      style={[styles.similarName, { color: colors.text, fontSize: fs(13), lineHeight: lh(13) }]}
-                      numberOfLines={2}>
-                      {item.name}
-                    </Text>
-                    <Text style={[styles.similarPrice, { color: colors.primary, fontSize: fs(14) }]}>
-                      {formatPrice(item.list_price)}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </>
-        ) : null}
-      </ScrollView>
-
-      <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-        <View style={[styles.stepper, { borderColor: colors.border, backgroundColor: colors.inputBg }]}>
-          <IconButton
-            icon="minus"
-            size={18}
-            onPress={() => setQuantity((value) => Math.max(1, value - 1))}
-            iconColor={colors.text}
-            style={styles.stepperButton}
-          />
-          <Text style={[styles.stepperText, { color: colors.text, fontSize: rs(16) }]}>{quantity}</Text>
-          <IconButton
-            icon="plus"
-            size={18}
-            onPress={() => setQuantity((value) => value + 1)}
-            iconColor={colors.text}
-            style={styles.stepperButton}
-          />
+          <View style={styles.headerSpacer} />
         </View>
 
-        <Button
-          mode="contained"
-          icon="cart-plus"
-          onPress={handleAddToCart}
-          style={styles.addButton}
-          contentStyle={styles.addButtonContent}
-          labelStyle={{ fontSize: fs(15), lineHeight: lh(15), fontWeight: '700' }}>
-          {labels.addToCart}
-        </Button>
-      </View>
+        <View style={styles.body}>
+          <ScrollView
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag">
+          <View style={[styles.imageWrap, { backgroundColor: colors.inputBg }]}>
+            <Image
+              source={{ uri: getProductImageUri(product) }}
+              cacheKey={imageCacheKey}
+              style={styles.image}
+              contentFit="cover"
+              transition={200}
+            />
+            {product.ribbon ? <ProductRibbonBadge ribbon={product.ribbon} /> : null}
+          </View>
+
+          <Text style={[styles.title, { color: colors.text, fontSize: fs(22), lineHeight: lh(22) }]}>
+            {product.name}
+          </Text>
+          <Text style={[styles.price, { color: colors.primary, fontSize: fs(22) }]}>
+            {formatPrice(product.list_price)}
+          </Text>
+
+          <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16) }]}>
+            {labels.description}
+          </Text>
+
+          {longDescription || internalNotes ? (
+            <>
+              {longDescription ? (
+                <View style={styles.descriptionBlock}>
+                  {internalNotes ? (
+                    <Text style={[styles.descriptionSubtitle, { color: colors.text, fontSize: fs(14), lineHeight: lh(14) }]}>
+                      {labels.longDescription}
+                    </Text>
+                  ) : null}
+                  <Text style={[styles.description, { color: colors.textMuted, fontSize: fs(14), lineHeight: lh(14) }]}>
+                    {longDescription}
+                  </Text>
+                </View>
+              ) : null}
+
+              {internalNotes ? (
+                <View style={[styles.descriptionBlock, longDescription ? styles.descriptionBlockSpaced : null]}>
+                  <Text style={[styles.descriptionSubtitle, { color: colors.text, fontSize: fs(14), lineHeight: lh(14) }]}>
+                    {labels.internalNotes}
+                  </Text>
+                  <Text style={[styles.description, { color: colors.textMuted, fontSize: fs(14), lineHeight: lh(14) }]}>
+                    {internalNotes}
+                  </Text>
+                </View>
+              ) : null}
+            </>
+          ) : (
+            <Text style={[styles.description, { color: colors.textMuted, fontSize: fs(14), lineHeight: lh(14) }]}>
+              {description ||
+                (!detailsLoaded ? labels.loadingDescription : labels.noDescription)}
+            </Text>
+          )}
+
+          {similarLoading || similar.length > 0 ? (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16) }]}>
+                {labels.similar}
+              </Text>
+              {similarLoading && similar.length === 0 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.similarRow}
+                  scrollEnabled={false}>
+                  <SimilarProductsSkeleton count={3} />
+                </ScrollView>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.similarRow}
+                  keyboardShouldPersistTaps="handled">
+                  {similar.map((item) => (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => openSimilarProduct(item)}
+                      style={[styles.similarCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <View style={[styles.similarImageWrap, { backgroundColor: colors.inputBg }]}>
+                        <Image
+                          source={{ uri: getProductImageUri(item) }}
+                          cacheKey={getProductImageCacheKey(item)}
+                          style={styles.image}
+                          contentFit="cover"
+                          transition={200}
+                        />
+                        {item.ribbon ? <ProductRibbonBadge ribbon={item.ribbon} /> : null}
+                      </View>
+                      <View style={styles.similarBody}>
+                        <Text
+                          style={[styles.similarName, { color: colors.text, fontSize: fs(13), lineHeight: lh(13) }]}
+                          numberOfLines={2}>
+                          {item.name}
+                        </Text>
+                        <Text style={[styles.similarPrice, { color: colors.primary, fontSize: fs(14) }]}>
+                          {formatPrice(item.list_price)}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
+            </>
+          ) : null}
+          </ScrollView>
+        </View>
+
+        <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          <QuantityStepper
+            value={quantity}
+            onChange={setQuantity}
+            fontSize={rs(16)}
+            iconSize={18}
+            borderColor={colors.border}
+            backgroundColor={colors.inputBg}
+            textColor={colors.text}
+          />
+
+          <Button
+            mode="contained"
+            icon="cart-plus"
+            onPress={handleAddToCart}
+            style={styles.addButton}
+            contentStyle={styles.addButtonContent}
+            labelStyle={{ fontSize: fs(15), lineHeight: lh(15), fontWeight: '700' }}>
+            {labels.addToCart}
+          </Button>
+        </View>
+      </KeyboardAvoidingView>
 
       <AppToast message={snackbar} visible={!!snackbar} onDismiss={() => setSnackbar('')} />
     </SafeAreaView>
@@ -371,6 +426,9 @@ const styles = StyleSheet.create({
     width: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  body: {
+    flex: 1,
   },
   content: {
     padding: 16,
@@ -446,20 +504,6 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  stepperButton: {
-    margin: 0,
-  },
-  stepperText: {
-    minWidth: 32,
-    textAlign: 'center',
-    fontWeight: '700',
   },
   addButton: {
     flex: 1,

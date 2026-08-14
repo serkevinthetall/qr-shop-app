@@ -36,12 +36,14 @@ export default function CartScreen() {
           data={items}
           keyExtractor={(item) => String(item.product.id)}
           contentContainerStyle={styles.listContent}
+          style={{ backgroundColor: colors.background }}
+          showsVerticalScrollIndicator={false}
+          showsHorizontalScrollIndicator={false}
           renderItem={({ item }) => (
             <CartLineItem
               product={item.product}
               quantity={item.quantity}
-              onIncrease={() => updateQuantity(item.product.id, item.quantity + 1)}
-              onDecrease={() => updateQuantity(item.product.id, item.quantity - 1)}
+              onQuantityChange={(nextQuantity) => updateQuantity(item.product.id, nextQuantity)}
               onRemove={() => removeFromCart(item.product.id)}
             />
           )}
@@ -53,7 +55,6 @@ export default function CartScreen() {
           styles.footer,
           {
             backgroundColor: colors.surface,
-            borderColor: colors.border,
             paddingHorizontal: horizontalPadding,
           },
         ]}>
@@ -111,6 +112,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 120,
+    paddingRight: 4,
   },
   emptyWrap: {
     flex: 1,
@@ -123,15 +125,14 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   footer: {
-    borderTopWidth: 1,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 8,
     paddingBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
     elevation: 12,
   },
   footerInner: {},

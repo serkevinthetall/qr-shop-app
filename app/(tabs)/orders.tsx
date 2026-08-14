@@ -2,7 +2,6 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   AppState,
   FlatList,
   Pressable,
@@ -15,6 +14,7 @@ import {
 import { Menu, Searchbar } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { OrdersListSkeleton } from '@/components/orders/order-card-skeleton';
 import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
 import { useAppColors } from '@/contexts/theme-context';
@@ -368,8 +368,30 @@ export default function OrdersScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.centered, { backgroundColor: colors.background }]} edges={['top']}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
+        <View style={styles.searchRow}>
+          <Searchbar
+            value=""
+            editable={false}
+            placeholder={lang.t('orders.searchPlaceholder')}
+            style={[styles.searchbar, styles.searchbarFlex, { backgroundColor: colors.inputBg }]}
+            inputStyle={searchbarInputStyle}
+            placeholderTextColor={colors.textMuted}
+            iconColor={colors.textMuted}
+          />
+          <View
+            style={[
+              styles.dateButton,
+              { backgroundColor: 'transparent', borderColor: 'transparent' },
+            ]}>
+            <MaterialCommunityIcons name="calendar-range" size={20} color={colors.primary} />
+            <MaterialCommunityIcons name="chevron-down" size={14} color={colors.textMuted} />
+          </View>
+        </View>
+
+        <StatusChips active="all" onChange={() => {}} colors={colors} lang={lang} />
+
+        <OrdersListSkeleton />
       </SafeAreaView>
     );
   }
@@ -460,7 +482,6 @@ export default function OrdersScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',

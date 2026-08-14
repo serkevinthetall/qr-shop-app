@@ -60,9 +60,15 @@ export async function fetchProducts(
   return data.products;
 }
 
-export async function fetchProductById(id: number, token?: string | null) {
+export async function fetchProductById(
+  id: number,
+  token?: string | null,
+  options?: { similarLimit?: number },
+) {
+  const similarLimit =
+    typeof options?.similarLimit === 'number' ? options.similarLimit : 8;
   const { response, data } = await apiRequest<ProductResponse | ApiErrorResponse>(
-    `/api/products/${id}`,
+    `/api/products/${id}?similar_limit=${similarLimit}`,
     { token: token || undefined },
   );
 

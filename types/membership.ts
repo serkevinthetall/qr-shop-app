@@ -36,6 +36,27 @@ export function normalizeMembershipLevel(level: string | undefined) {
   return (level ?? '').trim().toLowerCase();
 }
 
+export type MemberTier = 'premium' | 'pro' | 'registered';
+
+export function getMemberTier(level: string | undefined): MemberTier {
+  const tier = resolveMembershipTier(level);
+
+  if (tier === 'premium') {
+    return 'premium';
+  }
+
+  if (tier === 'pro') {
+    return 'pro';
+  }
+
+  return 'registered';
+}
+
+export function isProOrPremiumMember(level: string | undefined) {
+  const tier = getMemberTier(level);
+  return tier === 'pro' || tier === 'premium';
+}
+
 // Odoo can return label variants (e.g. "Premium Member", "Pro Plan"), so we match
 // by substring rather than exact equality. Premium is checked first because it is
 // the stricter tier and "premium" never contains "pro".

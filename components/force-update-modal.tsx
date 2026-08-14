@@ -1,17 +1,57 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import Constants from 'expo-constants';
+import { useRouter, type Href } from 'expo-router';
+import { useState } from 'react';
+import { BackHandler, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppStatus } from '@/contexts/app-status-context';
+import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
 import { useAppColors } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 
-/** Blocking update dialog — Update only, no dismiss / Later. */
+async function quitSession(signOut: () => Promise<void>, goLogin: () => void) {
+  try {
+    await signOut();
+  } catch {
+    // Continue navigation even if logout API fails.
+  }
+
+  goLogin();
+
+  const inExpoGo = Constants.appOwnership === 'expo';
+
+  if (Platform.OS === 'android' && !inExpoGo) {
+    BackHandler.exitApp();
+  }
+}
+
+/** Blocking update dialog — Update or Quit. */
 export function ForceUpdateModal() {
+  const router = useRouter();
   const colors = useAppColors();
   const { rs } = useResponsive();
   const { t, fs, lh } = useLanguage();
-  const { forceUpdateRequired, openStore, storeUrl, isChecking } = useAppStatus();
+  const { signOut } = useAuth();
+  const { forceUpdateRequired, openStore, storeUrl, isChecking, dismissForceUpdate } = useAppStatus();
+  const [isQuitting, setIsQuitting] = useState(false);
+
+  const handleQuit = async () => {
+    if (isQuitting) {
+      return;
+    }
+
+    setIsQuitting(true);
+    dismissForceUpdate();
+
+    try {
+      await quitSession(signOut, () => {
+        router.replace('/login' as Href);
+      });
+    } finally {
+      setIsQuitting(false);
+    }
+  };
 
   return (
     <Modal
@@ -19,7 +59,7 @@ export function ForceUpdateModal() {
       transparent
       animationType="fade"
       onRequestClose={() => {
-        // Hard update: ignore Android back.
+        handleQuit().catch(() => {});
       }}>
       <View
         style={[
@@ -48,23 +88,45 @@ export function ForceUpdateModal() {
             {t('update.body')}
           </Text>
 
-          <Pressable
-            onPress={() => {
-              openStore().catch(() => {});
-            }}
-            disabled={isChecking || !storeUrl}
-            style={[
-              styles.button,
-              {
-                backgroundColor: colors.primary,
-                opacity: !storeUrl ? 0.55 : 1,
-              },
-            ]}
-            accessibilityRole="button">
-            <Text style={[styles.buttonText, { color: colors.onPrimary, fontSize: fs(15) }]}>
-              {t('update.button')}
-            </Text>
-          </Pressable>
+          <View style={styles.actions}>
+            <Pressable
+              onPress={() => {
+                openStore().catch(() => {});
+              }}
+              disabled={isChecking || isQuitting || !storeUrl}
+              style={[
+                styles.actionButton,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: !storeUrl || isQuitting ? 0.55 : 1,
+                },
+              ]}
+              accessibilityRole="button">
+              <Text style={[styles.actionText, { color: colors.onPrimary, fontSize: fs(15) }]}>
+                {t('update.button')}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                handleQuit().catch(() => {});
+              }}
+              disabled={isQuitting}
+              style={[
+                styles.actionButton,
+                styles.quitButton,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.inputBg,
+                  opacity: isQuitting ? 0.7 : 1,
+                },
+              ]}
+              accessibilityRole="button">
+              <Text style={[styles.actionText, { color: colors.text, fontSize: fs(14) }]}>
+                {isQuitting ? '...' : t('network.quit')}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </Modal>
@@ -110,14 +172,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 22,
   },
-  button: {
-    minWidth: 160,
+  actions: {
+    width: '100%',
+    gap: 10,
+  },
+  actionButton: {
+    width: '100%',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 999,
     alignItems: 'center',
   },
-  buttonText: {
+  quitButton: {
+    borderWidth: 1,
+  },
+  actionText: {
     fontWeight: '700',
   },
 });
