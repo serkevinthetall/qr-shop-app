@@ -16,6 +16,7 @@
  *      e.g. colors.primary, colors.text, colors.card ...
  *
  *  Brand: Charcoal + Teal (aligned with the QR SHOP MYANMAR logo).
+ *  Dark mode: "Ink & Teal" — ink slate surfaces with teal CTAs (eye-strain friendly).
  * ============================================================================
  */
 
@@ -124,42 +125,43 @@ export const AppColors: { light: AppColorTokens; dark: AppColorTokens } = {
     qrSurface: '#f7f8f7',
   },
   dark: {
+    // Ink & Teal — Product Details palette (no pure black)
     // Surfaces
-    background: '#0e1217',
-    surface: '#161b22',
-    card: '#161b22',
-    screenAlt: '#0e1217',
-    border: '#262c36',
-    inputBg: '#11161d',
+    background: '#121818',
+    surface: '#1D2525',
+    card: '#1D2525',
+    screenAlt: '#121818',
+    border: '#2A3333',
+    inputBg: '#171F1F',
 
     // Text / icons
-    text: '#e6e8eb',
-    textMuted: '#9aa4b2',
-    icon: '#9aa4b2',
+    text: '#F1F5F4',
+    textMuted: '#9BA8A7',
+    icon: '#9BA8A7',
 
-    // Brand / primary
-    primary: '#2dd4bf',
-    onPrimary: '#04201d',
-    primaryMuted: '#134e4a',
-    primaryContainer: '#134e4a',
-    onPrimaryContainer: '#ccfbf1',
+    // Brand / primary — CTA #2A9D98, accent/price pop #43BDB6
+    primary: '#2A9D98',
+    onPrimary: '#F1F5F4',
+    primaryMuted: '#1A3332',
+    primaryContainer: '#1A3332',
+    onPrimaryContainer: '#43BDB6',
 
     // Status
-    success: '#22c55e',
-    successBg: '#14532d',
-    danger: '#dc2626',
-    dangerBg: '#7f1d1d',
+    success: '#34D399',
+    successBg: '#14532D',
+    danger: '#F87171',
+    dangerBg: '#7F1D1D',
 
     // Tabs / navigation
-    tabBar: '#161b22',
-    tabBarBorder: '#262c36',
-    tabIconDefault: '#6b7280',
-    tabIconSelected: '#2dd4bf',
-    tint: '#2dd4bf',
+    tabBar: '#1D2525',
+    tabBarBorder: '#2A3333',
+    tabIconDefault: '#9BA8A7',
+    tabIconSelected: '#43BDB6',
+    tint: '#43BDB6',
 
     // Effects / misc
     shadow: '#000000',
-    qrSurface: '#f7f8f7',
+    qrSurface: '#F1F5F4',
   },
 };
 
