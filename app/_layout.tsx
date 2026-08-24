@@ -12,6 +12,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } fro
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import { Analytics } from '@vercel/analytics/react';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
@@ -97,8 +98,14 @@ SplashScreen.preventAutoHideAsync();
 function RootNavigator() {
   const { isDark } = useThemeMode();
   const { language } = useLanguage();
+  const colors = getAppColors(isDark);
   const baseTheme = withBrandColors(isDark ? MD3DarkTheme : MD3LightTheme, isDark);
   const paperTheme = language === 'my' ? withBurmeseFonts(baseTheme) : baseTheme;
+
+  useEffect(() => {
+    // Prefer SystemUI over deprecated Window.setStatusBarColor / setNavigationBarColor.
+    void SystemUI.setBackgroundColorAsync(colors.background);
+  }, [colors.background]);
 
   return (
     <PaperProvider theme={paperTheme}>
