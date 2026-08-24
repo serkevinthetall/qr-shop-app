@@ -52,7 +52,7 @@ export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const { rs, horizontalPadding, contentMaxWidth } = useResponsive();
   const { token } = useAuth();
-  const { items, totalAmount, clearCart } = useCart();
+  const { items, totalAmount, clearCart, syncDeliveryFee } = useCart();
   const { language, t, fs, lh } = useLanguage();
   const addressRef = useRef<AddressCheckoutHandle>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -65,7 +65,12 @@ export default function CheckoutScreen() {
 
   const handleAddressSelectionChange = useCallback((addressId: number | null) => {
     setSelectedAddressId(addressId);
-  }, []);
+    if (addressId) {
+      void syncDeliveryFee({ addressId });
+    } else {
+      void syncDeliveryFee();
+    }
+  }, [syncDeliveryFee]);
 
   const [membership, setMembership] = useState<Membership | null>(null);
   const [availableCoupon, setAvailableCoupon] = useState<MembershipCoupon | null>(null);
