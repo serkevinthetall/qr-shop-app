@@ -1,4 +1,5 @@
-import { useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useRouter, type Href } from 'expo-router';
+import { useCallback, useMemo } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { Button } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,10 +15,28 @@ export default function CartScreen() {
   const router = useRouter();
   const colors = useAppColors();
   const { rs, horizontalPadding, contentMaxWidth } = useResponsive();
-  const { items, totalAmount, totalItems, updateQuantity, removeFromCart } = useCart();
+  const {
+    productItems,
+    totalAmount,
+    totalItems,
+    deliveryFeeAmount,
+    updateQuantity,
+    removeFromCart,
+    syncDeliveryFee,
+  } = useCart();
   const { t, fs, lh } = useLanguage();
 
-  if (!items.length) {
+  useFocusEffect(
+    useCallback(() => {
+      if (productItems.length) {
+        void syncDeliveryFee();
+      }
+    }, [productItems.length, syncDeliveryFee]),
+  );
+
+  const listData = useMemo(() => productItems, [productItems]);
+
+  if (!listData.length) {
     return (
       <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
         <View style={[styles.emptyWrap, { paddingHorizontal: horizontalPadding }]}>
@@ -33,7 +52,7 @@ export default function CartScreen() {
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={[styles.content, { paddingHorizontal: horizontalPadding, maxWidth: contentMaxWidth, alignSelf: 'center', width: '100%' }]}>
         <FlatList
-          data={items}
+          data={listData}
           keyExtractor={(item) => String(item.product.id)}
           contentContainerStyle={styles.listContent}
           style={{ backgroundColor: colors.background }}
@@ -69,6 +88,15 @@ export default function CartScreen() {
             </Text>
             <Text style={[styles.summaryValue, { color: colors.text, fontSize: fs(rs(14)), lineHeight: lh(14) }]}>
               {t('cart.itemsCount', { count: totalItems })}
+            </Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryLabel, { color: colors.textMuted, fontSize: fs(rs(14)), lineHeight: lh(14) }]}>
+              {t('cart.deliveryFee')}
+            </Text>
+            <Text style={[styles.summaryValue, { color: colors.text, fontSize: fs(rs(14)), lineHeight: lh(14) }]}>
+              {deliveryFeeAmount > 0 ? formatPrice(deliveryFeeAmount) : t('cart.deliveryFree')}
             </Text>
           </View>
 

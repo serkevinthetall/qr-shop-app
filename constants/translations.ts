@@ -31,9 +31,9 @@ const en: TranslationTree = {
     backOnline: 'Back online',
     cannotConnect: 'Cannot connect to the internet. Please check your connection and try again.',
     timedOut: 'Request timed out. Check your internet connection and try again.',
-    invalidResponse: 'Invalid server response. Please try again later.',
-    serverDownTitle: 'Server unavailable',
-    serverDownBody: 'QR Shop server is temporarily down. Please try again in a moment.',
+    invalidResponse: 'Something went wrong. Please try again later.',
+    serverDownTitle: 'Temporarily unavailable',
+    serverDownBody: 'QR Shop is temporarily unavailable. Please try again in a moment.',
   },
   update: {
     title: 'Update required',
@@ -86,6 +86,8 @@ const en: TranslationTree = {
     quantity: 'Quantity',
     itemsCount: '{count} items',
     subtotal: 'Subtotal',
+    deliveryFee: 'Delivery',
+    deliveryFree: 'Free',
   },
   orders: {
     title: 'Orders',
@@ -181,9 +183,6 @@ const en: TranslationTree = {
     notificationsSubtitle: 'New products and member coupon alerts.',
     resetPassword: 'Reset Password',
     resetPasswordSubtitle: 'Change your account password.',
-    clearCache: 'Clear Cache',
-    clearCacheSubtitle: 'Remove temporary app data. Login and cart are kept.',
-    clearCacheDone: 'Cache cleared.',
     signOut: 'Sign Out',
   },
   notifications: {
@@ -326,9 +325,9 @@ const my: TranslationTree = {
     backOnline: 'အင်တာနက် ပြန်ရပါပြီ',
     cannotConnect: 'အင်တာနက်ချိတ်ဆက်၍မရပါ။ ချိတ်ဆက်မှုကို စစ်ဆေးပြီး ထပ်မံကြိုးစားပါ။',
     timedOut: 'အချိန်ကုန်သွားပါပြီ။ အင်တာနက်ချိတ်ဆက်မှုကို စစ်ဆေးပြီး ထပ်မံကြိုးစားပါ။',
-    invalidResponse: 'ဆာဗာ တုံ့ပြန်မှု မမှန်ကန်ပါ။ နောက်မှ ထပ်မံကြိုးစားပါ။',
-    serverDownTitle: 'ဆာဗာ မရရှိနိုင်ပါ',
-    serverDownBody: 'QR Shop ဆာဗာ ယာယီ ရပ်နားနေပါသည်။ ခဏနေမှ ထပ်မံကြိုးစားပါ။',
+    invalidResponse: 'တစ်ခုခု မှားယွင်းနေပါသည်။ နောက်မှ ထပ်မံကြိုးစားပါ။',
+    serverDownTitle: 'ယာယီ မရရှိနိုင်ပါ',
+    serverDownBody: 'QR Shop ကို ယာယီ အသုံးပြု၍ မရနိုင်ပါ။ ခဏနေမှ ထပ်မံကြိုးစားပါ။',
   },
   update: {
     title: 'အပ်ဒိတ် လိုအပ်သည်',
@@ -381,6 +380,8 @@ const my: TranslationTree = {
     quantity: 'အရေအတွက်',
     itemsCount: 'ပစ္စည်း {count} ခု',
     subtotal: 'ကုန်ပစ္စည်းဖိုး',
+    deliveryFee: 'ပို့ဆောင်ခ',
+    deliveryFree: 'အခမဲ့',
   },
   orders: {
     title: 'အော်ဒါများ',
@@ -476,9 +477,6 @@ const my: TranslationTree = {
     notificationsSubtitle: 'ပစ္စည်းအသစ်နှင့် အဖွဲ့ဝင်ကူပွန် အသိပေးချက်များ။',
     resetPassword: 'စကားဝှက် ပြန်လည်သတ်မှတ်ရန်',
     resetPasswordSubtitle: 'သင့်အကောင့် စကားဝှက်ကို ပြောင်းရန်။',
-    clearCache: 'Cache ရှင်းရန်',
-    clearCacheSubtitle: 'ယာယီအချက်အလက်များ ဖျက်မည်။ Login နှင့် စျေးခြင်း ထိန်းသိမ်းထားမည်။',
-    clearCacheDone: 'Cache ရှင်းပြီးပါပြီ။',
     signOut: 'ထွက်ရန်',
   },
   notifications: {

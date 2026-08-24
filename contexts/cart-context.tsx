@@ -18,8 +18,11 @@ export type CartItem = {
 
 type CartContextValue = {
   items: CartItem[];
+  /** Product lines only (Delivery is shown in the cart summary, not the list). */
+  productItems: CartItem[];
   totalItems: number;
   totalAmount: number;
+  deliveryFeeAmount: number;
   addToCart: (product: Product, quantity?: number) => void;
   removeFromCart: (productId: number) => void;
   updateQuantity: (productId: number, quantity: number) => void;
@@ -242,6 +245,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     [items],
   );
 
+  const productItems = useMemo(() => withoutDelivery(items), [items]);
+
+  const deliveryFeeAmount = useMemo(() => {
+    const delivery = items.find((item) => isDeliveryCartProduct(item.product));
+    if (!delivery) {
+      return 0;
+    }
+    return Number(delivery.product.list_price) * Number(delivery.quantity || 1) || 0;
+  }, [items]);
+
   const totalAmount = useMemo(
     () => items.reduce((sum, item) => sum + item.product.list_price * item.quantity, 0),
     [items],
@@ -250,8 +263,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo(
     () => ({
       items,
+      productItems,
       totalItems,
       totalAmount,
+      deliveryFeeAmount,
       addToCart,
       removeFromCart,
       updateQuantity,
@@ -261,8 +276,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       items,
+      productItems,
       totalItems,
       totalAmount,
+      deliveryFeeAmount,
       addToCart,
       removeFromCart,
       updateQuantity,

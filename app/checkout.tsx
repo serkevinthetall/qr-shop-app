@@ -52,7 +52,7 @@ export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const { rs, horizontalPadding, contentMaxWidth } = useResponsive();
   const { token } = useAuth();
-  const { items, totalAmount, clearCart, syncDeliveryFee } = useCart();
+  const { items, productItems, totalAmount, deliveryFeeAmount, clearCart, syncDeliveryFee } = useCart();
   const { language, t, fs, lh } = useLanguage();
   const addressRef = useRef<AddressCheckoutHandle>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -285,7 +285,7 @@ export default function CheckoutScreen() {
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.cardTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16) }]}>{t('checkout.orderSummary')}</Text>
 
-          {items.map((item) => {
+          {productItems.map((item) => {
             const lineTotal = item.product.list_price * item.quantity;
 
             return (
@@ -306,6 +306,15 @@ export default function CheckoutScreen() {
               </View>
             );
           })}
+
+          <View style={[styles.summaryLine, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.summaryLineName, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}>
+              {t('cart.deliveryFee')}
+            </Text>
+            <Text style={[styles.summaryLineTotal, { color: colors.primary, fontSize: fs(15), lineHeight: lh(15) }]}>
+              {deliveryFeeAmount > 0 ? formatPrice(deliveryFeeAmount) : t('cart.deliveryFree')}
+            </Text>
+          </View>
 
           <View style={[styles.summaryDivider, { borderTopColor: colors.border }]} />
           <View style={styles.summaryTotalRow}>
