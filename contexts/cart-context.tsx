@@ -23,6 +23,8 @@ type CartContextValue = {
   totalItems: number;
   totalAmount: number;
   deliveryFeeAmount: number;
+  /** True while a delivery-fee quote request is in flight. */
+  isDeliveryFeeLoading: boolean;
   addToCart: (product: Product, quantity?: number) => void;
   removeFromCart: (productId: number) => void;
   updateQuantity: (productId: number, quantity: number) => void;
@@ -52,6 +54,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const { user, token } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
   const [isReady, setIsReady] = useState(false);
+  const [isDeliveryFeeLoading, setIsDeliveryFeeLoading] = useState(false);
   const wasLoggedIn = useRef(false);
   const syncSeq = useRef(0);
   const itemsRef = useRef(items);
@@ -90,13 +93,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const syncDeliveryFee = useCallback(
     async (options: { addressId?: number | null; zip?: string } = {}) => {
       const seq = ++syncSeq.current;
+      setIsDeliveryFeeLoading(true);
 
       if (!token) {
+        setIsDeliveryFeeLoading(false);
         setItems((current) => withoutDelivery(current));
         return;
       }
 
       if (!withoutDelivery(itemsRef.current).length) {
+        setIsDeliveryFeeLoading(false);
         setItems((current) => withoutDelivery(current));
         return;
       }
@@ -122,6 +128,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         // Keep existing cart products; checkout backend still applies the final fee.
         if (seq === syncSeq.current) {
           // Do not strip an existing fee on a transient network error.
+        }
+      } finally {
+        if (seq === syncSeq.current) {
+          setIsDeliveryFeeLoading(false);
         }
       }
     },
@@ -267,6 +277,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       totalItems,
       totalAmount,
       deliveryFeeAmount,
+      isDeliveryFeeLoading,
       addToCart,
       removeFromCart,
       updateQuantity,
@@ -280,6 +291,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       totalItems,
       totalAmount,
       deliveryFeeAmount,
+      isDeliveryFeeLoading,
       addToCart,
       removeFromCart,
       updateQuantity,

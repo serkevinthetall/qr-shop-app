@@ -12,7 +12,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { IconButton, Searchbar } from 'react-native-paper';
+import { Searchbar } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ProductCard, ProductListItem } from '@/components/products/product-card';
@@ -20,6 +20,8 @@ import { ProductCardSkeleton, ProductListItemSkeleton } from '@/components/produ
 import { SkeletonBox } from '@/components/skeleton';
 import { CategoryList } from '@/components/products/category-list';
 import { TabAppToast } from '@/components/app-toast';
+import { LanguageToggleChip } from '@/components/language-toggle-chip';
+import { ViewModeToggleButton } from '@/components/view-mode-toggle-button';
 import { searchbarInputStyle } from '@/constants/text-input';
 import { useAuth } from '@/contexts/auth-context';
 import { useCart } from '@/contexts/cart-context';
@@ -42,7 +44,7 @@ import { mergeProductsIfChanged } from '@/utils/product-sync';
 
 type ViewMode = 'grid' | 'list';
 const VIEW_MODE_KEY = 'qr-app-products-view-mode';
-const INITIAL_PRODUCT_LIMIT = 50;
+const INITIAL_PRODUCT_LIMIT = 75;
 const SKELETON_LIST_COUNT = 6;
 // Full catalog refresh only on open/pull/focus. Background price checks are cheap.
 const PRICE_POLL_INTERVAL_MS = 30000;
@@ -201,6 +203,10 @@ export default function ProductsScreen() {
     setViewMode(mode);
     AsyncStorage.setItem(VIEW_MODE_KEY, mode);
   }, []);
+
+  const toggleViewMode = useCallback(() => {
+    changeViewMode(viewMode === 'grid' ? 'list' : 'grid');
+  }, [changeViewMode, viewMode]);
 
   const numColumns = viewMode === 'list' ? 1 : gridColumns;
 
@@ -513,7 +519,8 @@ export default function ProductsScreen() {
           ]}>
           <View style={styles.searchRow}>
             <SkeletonBox style={styles.searchSkeleton} borderRadius={28} />
-            <SkeletonBox style={styles.viewToggleSkeleton} borderRadius={12} />
+            <SkeletonBox style={styles.headerChipIconSkeleton} borderRadius={12} />
+            <SkeletonBox style={styles.headerChipSkeleton} borderRadius={12} />
           </View>
         </View>
 
@@ -566,24 +573,12 @@ export default function ProductsScreen() {
             iconColor={colors.textMuted}
             placeholderTextColor={colors.textMuted}
           />
-          <View style={[styles.viewToggle, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-            <IconButton
-              icon="view-grid-outline"
-              size={20}
-              onPress={() => changeViewMode('grid')}
-              iconColor={viewMode === 'grid' ? colors.primary : colors.textMuted}
-              style={styles.viewToggleButton}
-              accessibilityLabel="Grid view"
-            />
-            <IconButton
-              icon="format-list-bulleted"
-              size={20}
-              onPress={() => changeViewMode('list')}
-              iconColor={viewMode === 'list' ? colors.primary : colors.textMuted}
-              style={styles.viewToggleButton}
-              accessibilityLabel="List view"
-            />
-          </View>
+          <ViewModeToggleButton
+            viewMode={viewMode}
+            onPress={toggleViewMode}
+            accessibilityLabel={viewMode === 'grid' ? t('products.viewList') : t('products.viewGrid')}
+          />
+          <LanguageToggleChip />
         </View>
       </View>
 
@@ -678,9 +673,13 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
   },
-  viewToggleSkeleton: {
-    width: 88,
-    height: 48,
+  headerChipSkeleton: {
+    width: 40,
+    height: 40,
+  },
+  headerChipIconSkeleton: {
+    width: 40,
+    height: 40,
   },
   categorySkeletonRow: {
     gap: 8,
@@ -695,15 +694,6 @@ const styles = StyleSheet.create({
   },
   productsList: {
     flex: 1,
-  },
-  viewToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  viewToggleButton: {
-    margin: 0,
   },
   listArea: {
     flex: 1,

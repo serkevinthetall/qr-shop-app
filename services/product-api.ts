@@ -110,3 +110,41 @@ export async function searchProducts(
 
   return data.products;
 }
+
+export type ProductPriceRow = {
+  id: number;
+  list_price: number;
+};
+
+export type ProductPricesSnapshot = {
+  unchanged: boolean;
+  version: string;
+  prices: ProductPriceRow[];
+};
+
+type ProductPricesResponse = {
+  success: true;
+  unchanged: boolean;
+  version: string;
+  prices: ProductPriceRow[];
+};
+
+/** Lightweight price poll used while the products tab is open. */
+export async function fetchProductPrices(token?: string | null, version?: string | null) {
+  const path = version
+    ? `/api/products/prices?version=${encodeURIComponent(version)}`
+    : '/api/products/prices';
+  const { response, data } = await apiRequest<ProductPricesResponse | ApiErrorResponse>(path, {
+    token: token || undefined,
+  });
+
+  if (!response.ok || !data || !data.success) {
+    throw new Error(getApiError(data, 'Failed to load product prices.'));
+  }
+
+  return {
+    unchanged: Boolean(data.unchanged),
+    version: data.version,
+    prices: data.prices ?? [],
+  } satisfies ProductPricesSnapshot;
+}

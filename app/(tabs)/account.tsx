@@ -13,10 +13,8 @@ import {
   type UpgradeContactInfo,
   type UpgradePlan,
 } from '@/components/membership-upgrade-modal';
-import { useAppStatus } from '@/contexts/app-status-context';
 import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
-import { useNetwork } from '@/contexts/network-context';
 import { useNotifications } from '@/contexts/notification-context';
 import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -29,7 +27,6 @@ import {
   setMembershipUpgradePending,
   submitMembershipUpgradeRequest,
 } from '@/services/membership-upgrade';
-import { clearProductPreviewCache } from '@/services/product-preview-cache';
 import type { Membership, MembershipCoupon } from '@/types/membership';
 import {
   getCouponEligibilityMessage,
@@ -40,6 +37,8 @@ import {
   isProOrPremiumMember,
 } from '@/types/membership';
 import { formatPrice } from '@/types/product';
+
+const ACCOUNT_SYNC_INTERVAL_MS = 20000;
 
 function readAccountSeed() {
   const seed = takeAccountBootstrap();
@@ -122,8 +121,6 @@ export default function AccountScreen() {
   const { user, token, signOut } = useAuth();
   const { t, fs, lh } = useLanguage();
   const { unreadCount } = useNotifications();
-  const { setSimulateOffline } = useNetwork();
-  const { setSimulateServerDown, setSimulateForceUpdate, clearStatusSimulations } = useAppStatus();
 
   const [accountSeed] = useState(readAccountSeed);
   const [membership, setMembership] = useState<Membership | null>(accountSeed.membership);
@@ -137,8 +134,6 @@ export default function AccountScreen() {
   const [upgradePending, setUpgradePending] = useState(false);
   const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
   const [isSubmittingUpgrade, setIsSubmittingUpgrade] = useState(false);
-  const [isClearingCache, setIsClearingCache] = useState(false);
-  const [cacheMessage, setCacheMessage] = useState('');
   const [showCelebration, setShowCelebration] = useState(false);
 
   const membershipLevel = membership?.x_studio_membership_level;
@@ -168,6 +163,7 @@ export default function AccountScreen() {
       }
       setUpgradePending(false);
     } else {
+      // Odoo application Requested → Processing; none / closed → Registered (+ Apply).
       setUpgradePending(!!pending);
     }
   }, [token, user]);
@@ -180,11 +176,17 @@ export default function AccountScreen() {
       .finally(() => setIsLoading(false));
   }, [loadAccountData]);
 
+  // Keep membership + Apply status in sync while Account is open (no pull-to-refresh needed).
   useFocusEffect(
     useCallback(() => {
-      loadAccountData().catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load account data.');
-      });
+      const syncQuietly = () => {
+        loadAccountData().catch(() => {});
+      };
+
+      syncQuietly();
+      const intervalId = setInterval(syncQuietly, ACCOUNT_SYNC_INTERVAL_MS);
+
+      return () => clearInterval(intervalId);
     }, [loadAccountData]),
   );
 
@@ -269,22 +271,6 @@ export default function AccountScreen() {
       setError(err instanceof Error ? err.message : 'Failed to submit upgrade request.');
     } finally {
       setIsSubmittingUpgrade(false);
-    }
-  };
-
-  const handleClearCache = async () => {
-    setIsClearingCache(true);
-    setCacheMessage('');
-    try {
-      clearProductPreviewCache();
-      await clearMembershipUpgradePending();
-      setUpgradePending(false);
-      setCacheMessage(t('account.clearCacheDone'));
-      await loadAccountData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to clear cache.');
-    } finally {
-      setIsClearingCache(false);
     }
   };
 
@@ -590,86 +576,6 @@ export default function AccountScreen() {
           ) : null}
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
-            {t('account.clearCache')}
-          </Text>
-          <Text style={[styles.themeSubtitle, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
-            {t('account.clearCacheSubtitle')}
-          </Text>
-          {cacheMessage ? (
-            <Text style={[styles.cacheMessage, { color: colors.success, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
-              {cacheMessage}
-            </Text>
-          ) : null}
-          <Button
-            mode="outlined"
-            icon="cached"
-            onPress={handleClearCache}
-            loading={isClearingCache}
-            disabled={isClearingCache}
-            style={styles.clearCacheButton}>
-            {t('account.clearCache')}
-          </Button>
-        </View>
-
-        {__DEV__ ? (
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
-              Status testing
-            </Text>
-            <Text style={[styles.themeSubtitle, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
-              Preview offline, server crash, and system upgrade popups. Dev only.
-            </Text>
-
-            <Button
-              mode="contained"
-              icon="wifi-off"
-              onPress={() => {
-                clearStatusSimulations();
-                setSimulateOffline(true);
-              }}
-              style={styles.statusTestButton}>
-              Offline popup
-            </Button>
-
-            <Button
-              mode="contained"
-              icon="server-network-off"
-              onPress={() => {
-                setSimulateOffline(false);
-                setSimulateForceUpdate(false);
-                setSimulateServerDown(true);
-              }}
-              style={styles.statusTestButton}>
-              Server crash popup
-            </Button>
-
-            <Button
-              mode="contained"
-              icon="cellphone-arrow-down"
-              onPress={() => {
-                setSimulateOffline(false);
-                setSimulateServerDown(false);
-                setSimulateForceUpdate(true);
-              }}
-              style={styles.statusTestButton}>
-              System upgrade popup
-            </Button>
-
-            <Button
-              mode="outlined"
-              icon="close-circle-outline"
-              onPress={() => {
-                setSimulateOffline(false);
-                clearStatusSimulations();
-              }}
-              style={styles.statusTestButton}>
-              Clear status tests
-            </Button>
-          </View>
-        ) : null}
-
         <Button mode="outlined" onPress={signOut} style={styles.logoutButton}>
           {t('account.signOut')}
         </Button>
@@ -826,17 +732,6 @@ const styles = StyleSheet.create({
   },
   addressButton: {
     marginTop: 12,
-  },
-  clearCacheButton: {
-    marginTop: 12,
-  },
-  statusTestButton: {
-    marginTop: 8,
-    borderRadius: 12,
-  },
-  cacheMessage: {
-    marginTop: 8,
-    fontWeight: '600',
   },
   navRow: {
     flexDirection: 'row',

@@ -1,8 +1,7 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import Constants from 'expo-constants';
 import { useRouter, type Href } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { BackHandler, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppToast } from '@/components/app-toast';
 import { useAppStatus } from '@/contexts/app-status-context';
@@ -11,26 +10,11 @@ import { useLanguage } from '@/contexts/language-context';
 import { useNetwork } from '@/contexts/network-context';
 import { useAppColors } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
-
-/** Expo Go / iOS cannot kill the process; leave the session instead. */
-async function quitSession(signOut: () => Promise<void>, goLogin: () => void) {
-  try {
-    await signOut();
-  } catch {
-    // Continue navigation even if logout API fails.
-  }
-
-  goLogin();
-
-  const inExpoGo = Constants.appOwnership === 'expo';
-
-  if (Platform.OS === 'android' && !inExpoGo) {
-    BackHandler.exitApp();
-  }
-}
+import { quitApp } from '@/utils/quit-app';
 
 /**
- * Minimal offline notice: internet icon + short note. Light/dark aware.
+ * Offline notice with Quit / Retry.
+ * Retry re-checks connectivity. Quit leaves the app.
  */
 export function OfflineNotice() {
   const router = useRouter();
@@ -65,14 +49,23 @@ export function OfflineNotice() {
     }
   }, [isOnline, quitDismissed, t]);
 
+  const busy = isChecking || isQuitting;
+  const showModal = visible && !isOnline && !forceUpdateRequired;
+
   const handleRetry = async () => {
+    if (busy) {
+      return;
+    }
+
     setQuitDismissed(false);
     const online = await refresh();
+
     if (online) {
       setVisible(false);
       setSnackbar(t('network.backOnline'));
       return;
     }
+
     setSnackbar(t('network.stillOffline'));
   };
 
@@ -87,17 +80,13 @@ export function OfflineNotice() {
     setVisible(false);
 
     try {
-      await quitSession(signOut, () => {
+      await quitApp(signOut, () => {
         router.replace('/login' as Href);
       });
     } finally {
       setIsQuitting(false);
     }
   };
-
-  const iconColor = colors.isDark ? colors.primary : colors.primary;
-  const iconBg = colors.primaryMuted;
-  const showModal = visible && !isOnline && !forceUpdateRequired;
 
   return (
     <>
@@ -122,27 +111,33 @@ export function OfflineNotice() {
                 shadowColor: colors.shadow,
               },
             ]}>
-            <View style={[styles.iconCircle, { backgroundColor: iconBg }]}>
-              <MaterialCommunityIcons name="wifi-off" size={rs(36)} color={iconColor} />
+            <View style={[styles.iconCircle, { backgroundColor: colors.primaryMuted }]}>
+              <MaterialCommunityIcons name="wifi-off" size={rs(36)} color={colors.primary} />
             </View>
+
+            <Text style={[styles.title, { color: colors.text, fontSize: fs(rs(17)), lineHeight: lh(17) }]}>
+              {t('network.offlineTitle')}
+            </Text>
 
             <Text
               style={[
                 styles.note,
-                { color: colors.text, fontSize: fs(rs(15)), lineHeight: lh(15) },
+                { color: colors.textMuted, fontSize: fs(rs(14)), lineHeight: lh(14) },
               ]}>
               {t('network.shortNote')}
             </Text>
 
             <View style={styles.actions}>
               <Pressable
-                onPress={handleRetry}
-                disabled={isChecking || isQuitting}
+                onPress={() => {
+                  handleRetry().catch(() => {});
+                }}
+                disabled={busy}
                 style={[
                   styles.actionButton,
                   {
                     backgroundColor: colors.primary,
-                    opacity: isChecking || isQuitting ? 0.7 : 1,
+                    opacity: busy ? 0.7 : 1,
                   },
                 ]}
                 accessibilityRole="button">
@@ -197,7 +192,7 @@ const styles = StyleSheet.create({
     maxWidth: 280,
     borderRadius: 20,
     borderWidth: 1,
-    paddingTop: 36,
+    paddingTop: 32,
     paddingBottom: 28,
     paddingHorizontal: 24,
     alignItems: 'center',
@@ -214,8 +209,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
   },
+  title: {
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
   note: {
-    fontWeight: '600',
+    fontWeight: '500',
     textAlign: 'center',
     marginBottom: 20,
   },

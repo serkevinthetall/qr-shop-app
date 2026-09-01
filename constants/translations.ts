@@ -23,7 +23,8 @@ const en: TranslationTree = {
     close: 'Close',
   },
   network: {
-    shortNote: 'No internet connection',
+    offlineTitle: 'No internet',
+    shortNote: 'No internet connection. Check your network and try again.',
     tryAgain: 'Retry',
     retry: 'Retry',
     quit: 'Quit',
@@ -37,7 +38,7 @@ const en: TranslationTree = {
   },
   update: {
     title: 'Update required',
-    body: 'A new version of QR Shop is required to continue. Please update the app.',
+    body: 'A new version of QR Shop is required to continue. Please update the app, then tap Retry.',
     button: 'Update',
   },
   welcome: {
@@ -51,6 +52,14 @@ const en: TranslationTree = {
     featureOrdersDescription: 'Check status, history, and order details anytime you need.',
     getStarted: 'Get Started',
   },
+  login: {
+    emailOrPhone: 'Email or Phone',
+    emailOrPhonePlaceholder: 'customer@email.com or 09420103001',
+    password: 'Password',
+    signIn: 'Log In',
+    loadingShop: 'Loading your shop...',
+    failed: 'Login failed. Please try again.',
+  },
   products: {
     title: 'Products',
     searchPlaceholder: 'Search products...',
@@ -61,6 +70,12 @@ const en: TranslationTree = {
     all: 'All',
     justForYou: 'Just for you',
     loadingProducts: 'Loading products...',
+    viewGrid: 'Grid',
+    viewList: 'List',
+    languageEn: 'EN',
+    languageMy: 'MM',
+    switchToEn: 'Switch to English',
+    switchToMy: 'Switch to Myanmar',
   },
   orderDetail: {
     title: 'Order Detail',
@@ -88,6 +103,7 @@ const en: TranslationTree = {
     subtotal: 'Subtotal',
     deliveryFee: 'Delivery',
     deliveryFree: 'Free',
+    deliveryLoading: '…',
   },
   orders: {
     title: 'Orders',
@@ -317,7 +333,8 @@ const my: TranslationTree = {
     close: 'ပိတ်ရန်',
   },
   network: {
-    shortNote: 'အင်တာနက် မရှိပါ',
+    offlineTitle: 'အင်တာနက် မရှိပါ',
+    shortNote: 'အင်တာနက်ချိတ်ဆက်မှု မရှိပါ။ ကွန်ရက်ကို စစ်ဆေးပြီး ထပ်မံကြိုးစားပါ။',
     tryAgain: 'Retry',
     retry: 'Retry',
     quit: 'Quit',
@@ -331,7 +348,7 @@ const my: TranslationTree = {
   },
   update: {
     title: 'အပ်ဒိတ် လိုအပ်သည်',
-    body: 'ဆက်လက်အသုံးပြုရန် QR Shop ဗားရှင်းအသစ်ကို အပ်ဒိတ်လုပ်ရန် လိုအပ်ပါသည်။',
+    body: 'ဆက်လက်အသုံးပြုရန် QR Shop ဗားရှင်းအသစ်ကို အပ်ဒိတ်လုပ်ပါ။ ပြီးပါက Retry ကို နှိပ်ပါ။',
     button: 'အပ်ဒိတ်',
   },
   welcome: {
@@ -345,6 +362,14 @@ const my: TranslationTree = {
     featureOrdersDescription: 'အော်ဒါအခြေအနေနှင့် မှတ်တမ်းကို အချိန်မရွေး ကြည့်နိုင်ပါသည်။',
     getStarted: 'စတင်မည်',
   },
+  login: {
+    emailOrPhone: 'အီးမေးလ် သို့မဟုတ် ဖုန်း',
+    emailOrPhonePlaceholder: 'customer@email.com or 09420103001',
+    password: 'စကားဝှက်',
+    signIn: 'အကောင့်ဝင်ရန်',
+    loadingShop: 'ဈေးဆိုင်ဖွင့်နေသည်...',
+    failed: 'အကောင့်ဝင်မှု မအောင်မြင်ပါ။ ထပ်မံကြိုးစားပါ။',
+  },
   products: {
     title: 'ပစ္စည်းများ',
     searchPlaceholder: 'ပစ္စည်းရှာရန်...',
@@ -355,6 +380,12 @@ const my: TranslationTree = {
     all: 'အားလုံး',
     justForYou: 'သင့်အတွက်ပဲ',
     loadingProducts: 'ပစ္စည်းများ ဖွင့်နေသည်...',
+    viewGrid: 'ကွက်များ',
+    viewList: 'စာရင်း',
+    languageEn: 'EN',
+    languageMy: 'MM',
+    switchToEn: 'အင်္ဂလိပ်သို့ ပြောင်းရန်',
+    switchToMy: 'မြန်မာသို့ ပြောင်းရန်',
   },
   orderDetail: {
     title: 'အော်ဒါ အသေးစိတ်',
@@ -382,6 +413,7 @@ const my: TranslationTree = {
     subtotal: 'ကုန်ပစ္စည်းဖိုး',
     deliveryFee: 'ပို့ဆောင်ခ',
     deliveryFree: 'အခမဲ့',
+    deliveryLoading: '…',
   },
   orders: {
     title: 'အော်ဒါများ',

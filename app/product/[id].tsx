@@ -20,7 +20,7 @@ import { onCatalogRefreshRequested } from '@/services/catalog-events';
 import { fetchProductById } from '@/services/product-api';
 import { getProductPreview, rememberProductPreview } from '@/services/product-preview-cache';
 import type { Product } from '@/types/product';
-import { formatPrice, getProductImageCacheKey, getProductImageUri } from '@/types/product';
+import { formatPrice, getProductImageUri } from '@/types/product';
 import { getProductDescription, getProductDescriptionSections } from '@/utils/product-text';
 
 export default function ProductDetailScreen() {
@@ -226,8 +226,6 @@ export default function ProductDetailScreen() {
 
   const description = getProductDescription(product);
   const { longDescription, internalNotes } = getProductDescriptionSections(product);
-  const imageCacheKey = getProductImageCacheKey(product);
-
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
@@ -255,7 +253,6 @@ export default function ProductDetailScreen() {
           <View style={[styles.imageWrap, { backgroundColor: colors.inputBg }]}>
             <Image
               source={{ uri: getProductImageUri(product) }}
-              cacheKey={imageCacheKey}
               style={styles.image}
               contentFit="cover"
               transition={200}
@@ -334,7 +331,6 @@ export default function ProductDetailScreen() {
                       <View style={[styles.similarImageWrap, { backgroundColor: colors.inputBg }]}>
                         <Image
                           source={{ uri: getProductImageUri(item) }}
-                          cacheKey={getProductImageCacheKey(item)}
                           style={styles.image}
                           contentFit="cover"
                           transition={200}

@@ -58,7 +58,6 @@ export function MembershipUpgradeModal({
     return [
       t('account.upgradePremiumBenefitMinPrice'),
       t('account.upgradePremiumBenefitCoupon'),
-      t('account.upgradePremiumBenefitCommission'),
     ];
   }, [activePlan, t]);
 

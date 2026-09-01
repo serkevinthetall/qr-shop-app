@@ -11,7 +11,7 @@ import { useLanguage } from '@/contexts/language-context';
 import { useAppColors } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import type { Product } from '@/types/product';
-import { formatPrice, getProductImageCacheKey, getProductImageUri } from '@/types/product';
+import { formatPrice, getProductImageUri } from '@/types/product';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -42,9 +42,9 @@ function createAddToCartIcon(rs: (n: number) => number) {
 }
 
 export function getNameBlockHeight(language: string, fontSize: number) {
-  // Burmese uses natural line metrics (no lineHeight), so reserve extra vertical space.
-  const lineMultiplier = language === 'my' ? 1.52 : 1.36;
-  return Math.ceil(fontSize * lineMultiplier * 2);
+  // Estimate max 2-line title height for card minHeight / skeleton only.
+  const lineMultiplier = language === 'my' ? 1.85 : 1.4;
+  return Math.ceil(fontSize * lineMultiplier * 2) + 4;
 }
 
 export function getProductCardMinHeight(
@@ -56,7 +56,7 @@ export function getProductCardMinHeight(
   const imageHeight = cardWidth / 1.2;
   const nameHeight = getNameBlockHeight(language, nameFontSize);
   const contentPadding = 16;
-  const priceBlock = rs(16) + 2;
+  const priceBlock = rs(16) + 4;
   const buttonBlock = 46;
 
   return Math.ceil(imageHeight + contentPadding + nameHeight + priceBlock + buttonBlock);
@@ -73,9 +73,7 @@ export function ProductCard({ product, onAddToCart, width }: ProductCardProps) {
   const { rs } = useResponsive();
   const { t, fs, language } = useLanguage();
   const imageUri = getProductImageUri(product);
-  const imageCacheKey = getProductImageCacheKey(product);
   const nameFontSize = fs(rs(14));
-  const nameHeight = getNameBlockHeight(language, nameFontSize);
   const cardMinHeight =
     width != null ? getProductCardMinHeight(width, rs, language, nameFontSize) : undefined;
 
@@ -93,7 +91,6 @@ export function ProductCard({ product, onAddToCart, width }: ProductCardProps) {
       <View style={[styles.imageWrap, { backgroundColor: colors.inputBg }]}>
         <Image
           source={{ uri: imageUri }}
-          cacheKey={imageCacheKey}
           style={styles.image}
           contentFit="cover"
           transition={200}
@@ -102,13 +99,12 @@ export function ProductCard({ product, onAddToCart, width }: ProductCardProps) {
       </View>
 
       <View style={styles.content}>
-        <View style={[styles.nameWrap, { height: nameHeight }]}>
-          <Text
-            style={[styles.name, { color: colors.text, fontSize: nameFontSize }]}
-            numberOfLines={2}>
-            {product.name}
-          </Text>
-        </View>
+        <Text
+          style={[styles.name, { color: colors.text, fontSize: nameFontSize }]}
+          numberOfLines={2}
+          ellipsizeMode="tail">
+          {product.name}
+        </Text>
         <Text style={[styles.price, { color: colors.primary, fontSize: rs(16) }]}>
           {formatPrice(product.list_price)}
         </Text>
@@ -135,16 +131,14 @@ type ProductListItemProps = {
 export function ProductListItem({ product, onAddToCart }: ProductListItemProps) {
   const colors = useAppColors();
   const { rs } = useResponsive();
-  const { t, fs, lh, language } = useLanguage();
+  const { t, fs, language } = useLanguage();
   const imageUri = getProductImageUri(product);
-  const imageCacheKey = getProductImageCacheKey(product);
 
   return (
     <View style={[styles.listItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={[styles.listImageWrap, { backgroundColor: colors.inputBg }]}>
         <Image
           source={{ uri: imageUri }}
-          cacheKey={imageCacheKey}
           style={styles.listImage}
           contentFit="cover"
           transition={200}
@@ -153,7 +147,10 @@ export function ProductListItem({ product, onAddToCart }: ProductListItemProps) 
       </View>
 
       <View style={styles.listContent}>
-        <Text style={[styles.cartName, { color: colors.text, fontSize: fs(rs(14)), lineHeight: lh(14) }]} numberOfLines={2}>
+        <Text
+          style={[styles.listName, { color: colors.text, fontSize: fs(rs(14)) }]}
+          numberOfLines={2}
+          ellipsizeMode="tail">
           {product.name}
         </Text>
         <Text style={[styles.cartPrice, { color: colors.primary, fontSize: rs(15) }]}>
@@ -191,7 +188,6 @@ export function CartLineItem({
   const { rs } = useResponsive();
   const { fs, lh } = useLanguage();
   const imageUri = getProductImageUri(product);
-  const imageCacheKey = getProductImageCacheKey(product);
   const opacity = useRef(new Animated.Value(1)).current;
 
   const animateAndRemove = () => {
@@ -217,7 +213,6 @@ export function CartLineItem({
       <View style={[styles.cartImageWrap, { backgroundColor: colors.inputBg }]}>
         <Image
           source={{ uri: imageUri }}
-          cacheKey={imageCacheKey}
           style={styles.cartImage}
           contentFit="cover"
           transition={200}
@@ -286,18 +281,15 @@ const styles = StyleSheet.create({
   },
   name: {
     fontWeight: '600',
-  },
-  nameWrap: {
-    justifyContent: 'flex-start',
-    overflow: 'hidden',
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
   },
   price: {
-    marginTop: 2,
+    marginTop: 4,
     fontWeight: '700',
   },
   addButton: {
     marginTop: 'auto',
-    paddingTop: 6,
+    paddingTop: 8,
   },
   addButtonContent: {
     height: 40,
@@ -328,6 +320,11 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 12,
     justifyContent: 'center',
+    minWidth: 0,
+  },
+  listName: {
+    fontWeight: '700',
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
   },
   listAddButton: {
     alignSelf: 'flex-start',

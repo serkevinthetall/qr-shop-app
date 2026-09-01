@@ -5,15 +5,21 @@ import {
   Keyboard,
   Platform,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { Button, HelperText, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
-import { latinTextInputContentStyle } from '@/constants/text-input';
+import { LanguageToggleChip } from '@/components/language-toggle-chip';
+import {
+  latinTextInputContentStyle,
+  paperButtonContentStyle,
+  paperButtonLabelStyle,
+  paperTextInputContainerStyle,
+} from '@/constants/text-input';
 import { useAuth } from '@/contexts/auth-context';
+import { useLanguage } from '@/contexts/language-context';
 import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useKeyboardBottomPadding } from '@/hooks/use-keyboard-bottom-padding';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -22,16 +28,11 @@ import { prefetchSessionBootstrap } from '@/services/catalog-bootstrap';
 const LOGO_LIGHT = require('@/assets/images/icon.png');
 const LOGO_DARK = require('@/assets/images/logo-dark.png');
 
-const LATIN_BUTTON_FONT = Platform.select({
-  ios: 'System',
-  android: 'sans-serif-medium',
-  default: undefined,
-});
-
 export default function LoginScreen() {
   const colors = useAppColors();
   const { isDark } = useThemeMode();
   const { rs, contentMaxWidth, horizontalPadding } = useResponsive();
+  const { t, fs, lh, language } = useLanguage();
   const { user, signIn } = useAuth();
   const keyboardPadding = useKeyboardBottomPadding(32);
   const [login, setLogin] = useState('');
@@ -45,6 +46,8 @@ export default function LoginScreen() {
   const logoSource = isDark ? LOGO_DARK : LOGO_LIGHT;
   const logoSize = rs(148);
   const keyboardOpen = keyboardPadding > 0 || focusedField !== null;
+  const inputContainerStyle =
+    language === 'my' ? paperTextInputContainerStyle(language) : undefined;
 
   if (user && !isPreparingSession) {
     return <Redirect href="/(tabs)" />;
@@ -64,7 +67,7 @@ export default function LoginScreen() {
       setIsPreparingSession(false);
     } catch (err) {
       setIsPreparingSession(false);
-      setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
+      setError(err instanceof Error ? err.message : t('login.failed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -92,6 +95,10 @@ export default function LoginScreen() {
               maxWidth: contentMaxWidth,
             },
           ]}>
+          <LanguageToggleChip
+            style={[styles.languageChip, { backgroundColor: colors.card, borderWidth: 0 }]}
+          />
+
           <Image
             source={logoSource}
             style={[styles.logo, { width: logoSize, height: logoSize }]}
@@ -99,39 +106,37 @@ export default function LoginScreen() {
             accessibilityLabel="QR Shop Myanmar"
           />
 
-          <Text style={[styles.title, { color: colors.text, fontSize: rs(24) }]}>Welcome back</Text>
-
           <TextInput
-            label="Email or Phone"
+            label={t('login.emailOrPhone')}
             value={login}
             onChangeText={setLogin}
             mode="outlined"
-            dense
+            dense={language !== 'my'}
             autoCapitalize="none"
             autoComplete="username"
             textContentType="username"
             keyboardType="email-address"
             returnKeyType="next"
-            placeholder="customer@email.com or 09420103001"
-            style={styles.input}
+            placeholder={t('login.emailOrPhonePlaceholder')}
+            style={[styles.input, inputContainerStyle]}
             contentStyle={latinTextInputContentStyle}
             onFocus={() => setFocusedField('login')}
             onBlur={() => setFocusedField((current) => (current === 'login' ? null : current))}
           />
 
           <TextInput
-            label="Password"
+            label={t('login.password')}
             value={password}
             onChangeText={setPassword}
             mode="outlined"
-            dense
+            dense={language !== 'my'}
             secureTextEntry={!showPassword}
             autoCapitalize="none"
             autoComplete="password"
             textContentType="password"
             returnKeyType="done"
             onSubmitEditing={handleLogin}
-            style={styles.input}
+            style={[styles.input, inputContainerStyle]}
             contentStyle={latinTextInputContentStyle}
             right={
               <TextInput.Icon
@@ -155,9 +160,9 @@ export default function LoginScreen() {
             loading={isSubmitting || isPreparingSession}
             disabled={isSubmitting || isPreparingSession}
             style={styles.button}
-            contentStyle={styles.buttonContent}
-            labelStyle={styles.buttonLabel}>
-            {isPreparingSession ? 'Loading your shop...' : 'Sign In'}
+            contentStyle={paperButtonContentStyle(language)}
+            labelStyle={paperButtonLabelStyle(language, fs, lh, 15)}>
+            {isPreparingSession ? t('login.loadingShop') : t('login.signIn')}
           </Button>
         </View>
       </KeyboardAwareScrollView>
@@ -179,16 +184,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 24,
     padding: 24,
+    paddingTop: 20,
     alignItems: 'center',
+    position: 'relative',
+  },
+  languageChip: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 1,
   },
   logo: {
     marginBottom: 16,
-  },
-  title: {
-    textAlign: 'center',
-    fontWeight: '800',
-    marginBottom: 24,
-    alignSelf: 'stretch',
   },
   input: {
     marginBottom: 12,
@@ -199,18 +206,5 @@ const styles = StyleSheet.create({
     marginTop: 8,
     alignSelf: 'stretch',
     width: '100%',
-  },
-  buttonContent: {
-    minHeight: 48,
-    paddingVertical: 8,
-    justifyContent: 'center',
-  },
-  buttonLabel: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '700',
-    marginVertical: 0,
-    includeFontPadding: false,
-    fontFamily: LATIN_BUTTON_FONT,
   },
 });

@@ -142,32 +142,32 @@ export async function submitMembershipUpgradeRequest(input: {
   }
 }
 
-/** Prefer Odoo Requested row; fall back to local pending cache. */
+/** Prefer Odoo Requested row; clear local pending when none / not open. */
 export async function resolveMembershipUpgradePending(
   token: string | null | undefined,
 ): Promise<MembershipUpgradePending | null> {
-  if (token) {
-    try {
-      const application = await fetchMembershipApplication(token);
-      if (application && isMembershipApplicationPending(application.status)) {
-        const plan = mapOdooPlanToApp(application.plan) || 'pro';
-        const pending: MembershipUpgradePending = {
-          plan,
-          requestedAt: application.requested_at || new Date().toISOString(),
-        };
-        await setMembershipUpgradePending(plan);
-        return pending;
-      }
-
-      // Approved/Rejected (or none) → clear local pending.
-      if (application && !isMembershipApplicationPending(application.status)) {
-        await clearMembershipUpgradePending();
-        return null;
-      }
-    } catch {
-      // Fall through to local cache if API/Odoo is unreachable.
-    }
+  if (!token) {
+    return getMembershipUpgradePending();
   }
 
-  return getMembershipUpgradePending();
+  try {
+    const application = await fetchMembershipApplication(token);
+
+    if (application && isMembershipApplicationPending(application.status)) {
+      const plan = mapOdooPlanToApp(application.plan) || 'pro';
+      const pending: MembershipUpgradePending = {
+        plan,
+        requestedAt: application.requested_at || new Date().toISOString(),
+      };
+      await setMembershipUpgradePending(plan);
+      return pending;
+    }
+
+    // No application, or Approved / Rejected → show normal member status (e.g. Registered).
+    await clearMembershipUpgradePending();
+    return null;
+  } catch {
+    // Fall through to local cache only if API/Odoo is unreachable.
+    return getMembershipUpgradePending();
+  }
 }

@@ -196,16 +196,26 @@ export default function OrderDetailScreen() {
           <View
             key={line.id}
             style={[styles.lineCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.lineName, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}>{line.name}</Text>
+            <View style={styles.lineTopRow}>
+              <Text
+                style={[styles.lineName, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}
+                numberOfLines={2}>
+                {line.name}
+              </Text>
+              <Text
+                style={[
+                  styles.lineTotal,
+                  {
+                    color: line.price_subtotal < 0 ? colors.success : colors.primary,
+                    fontSize: fs(15),
+                    lineHeight: lh(15),
+                  },
+                ]}>
+                {formatPrice(line.price_subtotal)}
+              </Text>
+            </View>
             <Text style={[styles.lineMeta, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
               {t('orderDetail.qty')}: {line.product_uom_qty} × {formatPrice(line.price_unit)}
-            </Text>
-            <Text
-              style={[
-                styles.lineTotal,
-                { color: line.price_subtotal < 0 ? colors.success : colors.primary, fontSize: fs(15), lineHeight: lh(15) },
-              ]}>
-              {formatPrice(line.price_subtotal)}
             </Text>
           </View>
         ))}
@@ -386,14 +396,22 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10,
   },
+  lineTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   lineName: {
+    flex: 1,
+    minWidth: 0,
     fontWeight: '600',
   },
   lineMeta: {
     marginTop: 4,
   },
   lineTotal: {
-    marginTop: 6,
+    flexShrink: 0,
     fontWeight: '700',
     textAlign: 'right',
   },

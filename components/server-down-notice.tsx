@@ -1,8 +1,7 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import Constants from 'expo-constants';
 import { useRouter, type Href } from 'expo-router';
 import { useState } from 'react';
-import { BackHandler, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppStatus } from '@/contexts/app-status-context';
 import { useAuth } from '@/contexts/auth-context';
@@ -10,22 +9,7 @@ import { useLanguage } from '@/contexts/language-context';
 import { useNetwork } from '@/contexts/network-context';
 import { useAppColors } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
-
-async function quitSession(signOut: () => Promise<void>, goLogin: () => void) {
-  try {
-    await signOut();
-  } catch {
-    // Continue navigation even if logout API fails.
-  }
-
-  goLogin();
-
-  const inExpoGo = Constants.appOwnership === 'expo';
-
-  if (Platform.OS === 'android' && !inExpoGo) {
-    BackHandler.exitApp();
-  }
-}
+import { quitApp } from '@/utils/quit-app';
 
 /** Shown when the device is online but the QR Shop API is unreachable. */
 export function ServerDownNotice() {
@@ -35,10 +19,20 @@ export function ServerDownNotice() {
   const { t, fs, lh } = useLanguage();
   const { signOut } = useAuth();
   const { isOnline } = useNetwork();
-  const { serverDown, forceUpdateRequired, isChecking, refreshStatus, dismissServerDown } = useAppStatus();
+  const { serverDown, forceUpdateRequired, isChecking, refreshStatus, dismissServerDown } =
+    useAppStatus();
   const [isQuitting, setIsQuitting] = useState(false);
 
   const visible = serverDown && isOnline && !forceUpdateRequired;
+  const busy = isChecking || isQuitting;
+
+  const handleRetry = async () => {
+    if (busy) {
+      return;
+    }
+
+    await refreshStatus();
+  };
 
   const handleQuit = async () => {
     if (isQuitting) {
@@ -49,7 +43,7 @@ export function ServerDownNotice() {
     dismissServerDown();
 
     try {
-      await quitSession(signOut, () => {
+      await quitApp(signOut, () => {
         router.replace('/login' as Href);
       });
     } finally {
@@ -80,7 +74,7 @@ export function ServerDownNotice() {
             },
           ]}>
           <View style={[styles.iconCircle, { backgroundColor: colors.primaryMuted }]}>
-            <MaterialCommunityIcons name="server-network-off" size={rs(36)} color={colors.primary} />
+            <MaterialCommunityIcons name="cloud-off-outline" size={rs(36)} color={colors.primary} />
           </View>
 
           <Text style={[styles.title, { color: colors.text, fontSize: fs(rs(17)), lineHeight: lh(17) }]}>
@@ -95,14 +89,14 @@ export function ServerDownNotice() {
           <View style={styles.actions}>
             <Pressable
               onPress={() => {
-                refreshStatus().catch(() => {});
+                handleRetry().catch(() => {});
               }}
-              disabled={isChecking || isQuitting}
+              disabled={busy}
               style={[
                 styles.actionButton,
                 {
                   backgroundColor: colors.primary,
-                  opacity: isChecking || isQuitting ? 0.7 : 1,
+                  opacity: busy ? 0.7 : 1,
                 },
               ]}
               accessibilityRole="button">

@@ -20,6 +20,7 @@ export default function CartScreen() {
     totalAmount,
     totalItems,
     deliveryFeeAmount,
+    isDeliveryFeeLoading,
     updateQuantity,
     removeFromCart,
     syncDeliveryFee,
@@ -33,6 +34,16 @@ export default function CartScreen() {
       }
     }, [productItems.length, syncDeliveryFee]),
   );
+
+  const deliveryFeeLabel = useMemo(() => {
+    if (isDeliveryFeeLoading && deliveryFeeAmount <= 0) {
+      return t('cart.deliveryLoading');
+    }
+    if (deliveryFeeAmount > 0) {
+      return formatPrice(deliveryFeeAmount);
+    }
+    return t('cart.deliveryFree');
+  }, [deliveryFeeAmount, isDeliveryFeeLoading, t]);
 
   const listData = useMemo(() => productItems, [productItems]);
 
@@ -96,7 +107,7 @@ export default function CartScreen() {
               {t('cart.deliveryFee')}
             </Text>
             <Text style={[styles.summaryValue, { color: colors.text, fontSize: fs(rs(14)), lineHeight: lh(14) }]}>
-              {deliveryFeeAmount > 0 ? formatPrice(deliveryFeeAmount) : t('cart.deliveryFree')}
+              {deliveryFeeLabel}
             </Text>
           </View>
 

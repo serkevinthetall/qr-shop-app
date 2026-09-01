@@ -1,40 +1,47 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import Constants from 'expo-constants';
 import { useRouter, type Href } from 'expo-router';
 import { useState } from 'react';
-import { BackHandler, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppStatus } from '@/contexts/app-status-context';
 import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
 import { useAppColors } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
+import { quitApp } from '@/utils/quit-app';
 
-async function quitSession(signOut: () => Promise<void>, goLogin: () => void) {
-  try {
-    await signOut();
-  } catch {
-    // Continue navigation even if logout API fails.
-  }
-
-  goLogin();
-
-  const inExpoGo = Constants.appOwnership === 'expo';
-
-  if (Platform.OS === 'android' && !inExpoGo) {
-    BackHandler.exitApp();
-  }
-}
-
-/** Blocking update dialog — Update or Quit. */
+/**
+ * Blocking update notice with Quit / Retry.
+ * Retry opens the store (and re-checks version). Quit leaves the app.
+ */
 export function ForceUpdateModal() {
   const router = useRouter();
   const colors = useAppColors();
   const { rs } = useResponsive();
   const { t, fs, lh } = useLanguage();
   const { signOut } = useAuth();
-  const { forceUpdateRequired, openStore, storeUrl, isChecking, dismissForceUpdate } = useAppStatus();
+  const { forceUpdateRequired, isChecking, openStore, refreshStatus } = useAppStatus();
   const [isQuitting, setIsQuitting] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  const busy = isChecking || isRetrying || isQuitting;
+
+  const handleRetry = async () => {
+    if (busy) {
+      return;
+    }
+
+    setIsRetrying(true);
+
+    try {
+      await openStore();
+      await refreshStatus();
+    } catch {
+      // Keep modal open so the user can quit or try again.
+    } finally {
+      setIsRetrying(false);
+    }
+  };
 
   const handleQuit = async () => {
     if (isQuitting) {
@@ -42,10 +49,9 @@ export function ForceUpdateModal() {
     }
 
     setIsQuitting(true);
-    dismissForceUpdate();
 
     try {
-      await quitSession(signOut, () => {
+      await quitApp(signOut, () => {
         router.replace('/login' as Href);
       });
     } finally {
@@ -91,19 +97,19 @@ export function ForceUpdateModal() {
           <View style={styles.actions}>
             <Pressable
               onPress={() => {
-                openStore().catch(() => {});
+                handleRetry().catch(() => {});
               }}
-              disabled={isChecking || isQuitting || !storeUrl}
+              disabled={busy}
               style={[
                 styles.actionButton,
                 {
                   backgroundColor: colors.primary,
-                  opacity: !storeUrl || isQuitting ? 0.55 : 1,
+                  opacity: busy ? 0.7 : 1,
                 },
               ]}
               accessibilityRole="button">
-              <Text style={[styles.actionText, { color: colors.onPrimary, fontSize: fs(15) }]}>
-                {t('update.button')}
+              <Text style={[styles.actionText, { color: colors.onPrimary, fontSize: fs(14) }]}>
+                {isRetrying || isChecking ? '...' : t('network.retry')}
               </Text>
             </Pressable>
 
@@ -170,7 +176,7 @@ const styles = StyleSheet.create({
   body: {
     fontWeight: '500',
     textAlign: 'center',
-    marginBottom: 22,
+    marginBottom: 20,
   },
   actions: {
     width: '100%',
@@ -178,7 +184,7 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     width: '100%',
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 999,
     alignItems: 'center',

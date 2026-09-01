@@ -52,12 +52,22 @@ export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const { rs, horizontalPadding, contentMaxWidth } = useResponsive();
   const { token } = useAuth();
-  const { items, productItems, totalAmount, deliveryFeeAmount, clearCart, syncDeliveryFee } = useCart();
+  const { items, productItems, totalAmount, deliveryFeeAmount, isDeliveryFeeLoading, clearCart, syncDeliveryFee } = useCart();
   const { language, t, fs, lh } = useLanguage();
   const addressRef = useRef<AddressCheckoutHandle>(null);
   const scrollRef = useRef<ScrollView>(null);
   const notesFieldRef = useRef<View>(null);
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+
+  const deliveryFeeLabel = useMemo(() => {
+    if (isDeliveryFeeLoading && deliveryFeeAmount <= 0) {
+      return t('cart.deliveryLoading');
+    }
+    if (deliveryFeeAmount > 0) {
+      return formatPrice(deliveryFeeAmount);
+    }
+    return t('cart.deliveryFree');
+  }, [deliveryFeeAmount, isDeliveryFeeLoading, t]);
 
   const handleAddressError = useCallback((message: string) => {
     setError(message);
@@ -292,28 +302,33 @@ export default function CheckoutScreen() {
               <View
                 key={item.product.id}
                 style={[styles.summaryLine, { borderBottomColor: colors.border }]}>
-                <Text
-                  style={[styles.summaryLineName, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}
-                  numberOfLines={2}>
-                  {item.product.name}
-                </Text>
+                <View style={styles.summaryLineTop}>
+                  <Text
+                    style={[styles.summaryLineName, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}
+                    numberOfLines={2}>
+                    {item.product.name}
+                  </Text>
+                  <Text
+                    style={[styles.summaryLineTotal, { color: colors.primary, fontSize: fs(15), lineHeight: lh(15) }]}>
+                    {formatPrice(lineTotal)}
+                  </Text>
+                </View>
                 <Text style={[styles.summaryLineMeta, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
                   {t('orderDetail.qty')}: {item.quantity} × {formatPrice(item.product.list_price)}
-                </Text>
-                <Text style={[styles.summaryLineTotal, { color: colors.primary, fontSize: fs(15), lineHeight: lh(15) }]}>
-                  {formatPrice(lineTotal)}
                 </Text>
               </View>
             );
           })}
 
           <View style={[styles.summaryLine, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.summaryLineName, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}>
-              {t('cart.deliveryFee')}
-            </Text>
-            <Text style={[styles.summaryLineTotal, { color: colors.primary, fontSize: fs(15), lineHeight: lh(15) }]}>
-              {deliveryFeeAmount > 0 ? formatPrice(deliveryFeeAmount) : t('cart.deliveryFree')}
-            </Text>
+            <View style={styles.summaryLineTop}>
+              <Text style={[styles.summaryLineName, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}>
+                {t('cart.deliveryFee')}
+              </Text>
+              <Text style={[styles.summaryLineTotal, { color: colors.primary, fontSize: fs(15), lineHeight: lh(15) }]}>
+                {deliveryFeeLabel}
+              </Text>
+            </View>
           </View>
 
           <View style={[styles.summaryDivider, { borderTopColor: colors.border }]} />
@@ -556,14 +571,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  summaryLineTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   summaryLineName: {
+    flex: 1,
+    minWidth: 0,
     fontWeight: '600',
   },
   summaryLineMeta: {
     marginTop: 4,
   },
   summaryLineTotal: {
-    marginTop: 6,
+    flexShrink: 0,
     fontWeight: '700',
     textAlign: 'right',
   },

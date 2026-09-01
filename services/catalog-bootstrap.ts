@@ -4,7 +4,7 @@ import { fetchCategories, fetchProducts } from '@/services/product-api';
 import type { Membership, MembershipCoupon } from '@/types/membership';
 import type { Category, Product } from '@/types/product';
 
-const INITIAL_PRODUCT_LIMIT = 50;
+const INITIAL_PRODUCT_LIMIT = 75;
 
 export type CatalogBootstrap = {
   products: Product[];
