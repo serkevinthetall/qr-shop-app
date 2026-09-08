@@ -31,8 +31,9 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# env files (keep .env.example committed)
+# env files (including .env.example — keep off GitHub)
 .env
+.env.*
 .env*.local
 
 # Firebase admin SDK keys (never commit)
