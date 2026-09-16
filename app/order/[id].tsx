@@ -9,21 +9,31 @@ import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
 import { useAppColors } from '@/contexts/theme-context';
 import { useReorder } from '@/hooks/use-reorder';
-import { fetchOrderById, getOrderShippingLabel, getStatusLabel, type Order, type OrderLine } from '@/services/order-api';
+import {
+  fetchOrderById,
+  getOrderDeliveryStatus,
+  getOrderShippingLabel,
+  getStatusLabel,
+  type DeliveryBucketItem,
+  type DeliveryStatus,
+  type Order,
+  type OrderLine,
+} from '@/services/order-api';
 import { formatPrice } from '@/types/product';
 
 type AppColors = ReturnType<typeof useAppColors>;
 
-function getStatusBadgeColors(state: string, colors: AppColors) {
-  switch (state) {
-    case 'done':
+function getStatusBadgeColors(status: DeliveryStatus, colors: AppColors) {
+  switch (status) {
+    case 'completed':
+    case 'delivered':
       return { bg: colors.successBg, text: colors.success, border: colors.success };
-    case 'cancel':
+    case 'cancelled':
       return { bg: colors.dangerBg, text: colors.danger, border: colors.danger };
-    case 'sale':
+    case 'partial':
+    case 'preparing':
       return { bg: colors.primaryMuted, text: colors.primary, border: colors.primary };
-    case 'draft':
-    case 'sent':
+    case 'pending':
     default:
       return { bg: colors.inputBg, text: colors.textMuted, border: colors.border };
   }
@@ -39,6 +49,8 @@ export default function OrderDetailScreen() {
 
   const [order, setOrder] = useState<Order | null>(null);
   const [lines, setLines] = useState<OrderLine[]>([]);
+  const [deliveringNow, setDeliveringNow] = useState<DeliveryBucketItem[]>([]);
+  const [comingLater, setComingLater] = useState<DeliveryBucketItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -51,6 +63,8 @@ export default function OrderDetailScreen() {
       .then((data) => {
         setOrder(data.order);
         setLines(data.lines);
+        setDeliveringNow(data.delivering_now);
+        setComingLater(data.coming_later);
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : 'Failed to load order.');
@@ -82,8 +96,10 @@ export default function OrderDetailScreen() {
   const hasDiscount = discountLines.length > 0;
   const discountTotal = discountLines.reduce((sum, line) => sum + line.price_subtotal, 0);
   const originalTotal = order.amount_total - discountTotal;
+  const deliveryStatus = getOrderDeliveryStatus(order);
   const shippingLabel = getOrderShippingLabel(order);
-  const statusBadge = getStatusBadgeColors(order.state, colors);
+  const statusBadge = getStatusBadgeColors(deliveryStatus, colors);
+  const showDeliverySplit = deliveryStatus === 'partial' || deliveryStatus === 'preparing' || deliveryStatus === 'delivered';
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -114,8 +130,8 @@ export default function OrderDetailScreen() {
                     styles.statusBadgeText,
                     { color: statusBadge.text, fontSize: fs(11), lineHeight: lh(11) },
                   ]}
-                  numberOfLines={1}>
-                  {getStatusLabel(order.state, t)}
+                  numberOfLines={2}>
+                  {getStatusLabel(order.state, t, deliveryStatus)}
                 </Text>
               </View>
             </View>
@@ -190,6 +206,38 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
+        {showDeliverySplit ? (
+          <>
+            {deliveringNow.length > 0 ? (
+              <DeliverySection
+                title={
+                  deliveryStatus === 'delivered' || deliveryStatus === 'completed'
+                    ? t('orderDetail.deliveredItems')
+                    : t('orderDetail.deliveringNow')
+                }
+                items={deliveringNow}
+                colors={colors}
+                fs={fs}
+                lh={lh}
+              />
+            ) : null}
+
+            {comingLater.length > 0 ? (
+              <DeliverySection
+                title={t('orderDetail.comingLater')}
+                items={comingLater}
+                colors={colors}
+                fs={fs}
+                lh={lh}
+                hint={
+                  deliveryStatus === 'preparing' ? t('orderDetail.preparingHint') : t('orderDetail.backorderHint')
+                }
+                muted
+              />
+            ) : null}
+          </>
+        ) : null}
+
         <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(18), lineHeight: lh(18) }]}>{t('orderDetail.items')}</Text>
 
         {lines.map((line) => (
@@ -216,6 +264,9 @@ export default function OrderDetailScreen() {
             </View>
             <Text style={[styles.lineMeta, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
               {t('orderDetail.qty')}: {line.product_uom_qty} × {formatPrice(line.price_unit)}
+              {typeof line.qty_delivered === 'number' && typeof line.qty_pending === 'number' && line.qty_pending > 0
+                ? ` · ${line.qty_delivered}/${line.product_uom_qty}`
+                : ''}
             </Text>
           </View>
         ))}
@@ -237,6 +288,54 @@ export default function OrderDetailScreen() {
         </Button>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function DeliverySection({
+  title,
+  items,
+  colors,
+  fs,
+  lh,
+  hint,
+  muted = false,
+}: {
+  title: string;
+  items: DeliveryBucketItem[];
+  colors: AppColors;
+  fs: (size: number) => number;
+  lh: (size: number) => number | undefined;
+  hint?: string;
+  muted?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.deliverySection,
+        {
+          backgroundColor: muted ? colors.inputBg : colors.card,
+          borderColor: colors.border,
+        },
+      ]}>
+      <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16), marginBottom: 10 }]}>
+        {title}
+      </Text>
+      {items.map((item) => (
+        <View key={`${item.id}-${item.qty}`} style={styles.deliveryRow}>
+          <Text
+            style={[styles.deliveryName, { color: colors.text, fontSize: fs(14), lineHeight: lh(14) }]}
+            numberOfLines={2}>
+            {item.name}
+          </Text>
+          <Text style={[styles.deliveryQty, { color: colors.textMuted, fontSize: fs(14), lineHeight: lh(14) }]}>
+            × {item.qty}
+          </Text>
+        </View>
+      ))}
+      {hint ? (
+        <Text style={[styles.deliveryHint, { color: colors.textMuted, fontSize: fs(12), lineHeight: lh(12) }]}>{hint}</Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -362,6 +461,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     flexShrink: 0,
+    maxWidth: '48%',
   },
   statusBadgeText: {
     fontWeight: '700',
@@ -389,6 +489,30 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontWeight: '700',
     marginBottom: 12,
+  },
+  deliverySection: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+  },
+  deliveryRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 8,
+  },
+  deliveryName: {
+    flex: 1,
+    fontWeight: '600',
+  },
+  deliveryQty: {
+    fontWeight: '700',
+  },
+  deliveryHint: {
+    marginTop: 4,
+    fontWeight: '500',
   },
   lineCard: {
     borderWidth: 1,

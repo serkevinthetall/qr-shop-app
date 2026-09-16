@@ -2,7 +2,7 @@
   "expo": {
     "name": "QR Shop",
     "slug": "qr-shop-app",
-    "version": "1.2",
+    "version": "1.4.1",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "qrapp",
@@ -15,11 +15,11 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "12"
+      "buildNumber": "19"
     },
     "android": {
       "package": "com.qrshop.myanmar",
-      "versionCode": 20,
+      "versionCode": 23,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
@@ -44,12 +44,13 @@
         "expo-build-properties",
         {
           "ios": {
-            "useFrameworks": "static"
+            "useFrameworks": "static",
+            "networkInspector": false
           },
           "android": {
             "enableProguardInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
-            "extraProguardRules": "-keep class io.invertase.firebase.** { *; }\n-keep class com.google.firebase.** { *; }\n-keep class com.google.android.gms.** { *; }\n-dontwarn com.google.firebase.**\n-dontwarn com.google.android.gms.**"
+            "extraProguardRules": "-keep class io.invertase.firebase.** { *; }\n-keep class com.google.firebase.** { *; }\n-keep class com.google.android.gms.** { *; }\n-dontwarn com.google.firebase.**\n-dontwarn com.google.android.gms.**\n-keep class com.qrshop.myanmar.network.** { *; }\n-keepclassmembers class com.qrshop.myanmar.network.** { *; }"
           }
         }
       ],
@@ -82,7 +83,9 @@
       "@react-native-firebase/app",
       "@react-native-firebase/analytics",
       "./plugins/with-rnfb-ios-fix.js",
-      "./plugins/with-android-play-compliance.js"
+      "./plugins/with-android-play-compliance.js",
+      "./plugins/with-okhttp-doh.js",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

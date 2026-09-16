@@ -1,11 +1,22 @@
 import { orderRequest } from '@/services/order-client';
 
-const KNOWN_ORDER_STATES = ['draft', 'sent', 'sale', 'done', 'cancel'];
+export type DeliveryStatus =
+  | 'pending'
+  | 'preparing'
+  | 'partial'
+  | 'delivered'
+  | 'completed'
+  | 'cancelled';
 
-// Maps raw Odoo sale-order states to customer-friendly, translated labels.
-export function getStatusLabel(state: string, t: (key: string) => string) {
-  return KNOWN_ORDER_STATES.includes(state) ? t(`orderStatus.${state}`) : state;
-}
+const KNOWN_ORDER_STATES = ['draft', 'sent', 'sale', 'done', 'cancel'];
+const KNOWN_DELIVERY_STATUSES: DeliveryStatus[] = [
+  'pending',
+  'preparing',
+  'partial',
+  'delivered',
+  'completed',
+  'cancelled',
+];
 
 type ApiErrorResponse = {
   success: false;
@@ -25,10 +36,18 @@ export type OrderShippingAddress = {
   label: string;
 };
 
+export type DeliveryBucketItem = {
+  id: number;
+  product_id?: [number, string] | false;
+  name: string;
+  qty: number;
+};
+
 export type Order = {
   id: number;
   name: string;
   state: string;
+  invoice_status?: string;
   amount_total: number;
   date_order: string;
   partner_id: [number, string];
@@ -38,6 +57,9 @@ export type Order = {
   x_studio_preferred_delivery_date?: string | false;
   x_studio_delivery_notes?: string | false;
   note?: string | false;
+  delivery_status?: DeliveryStatus;
+  delivering_now_count?: number;
+  coming_later_count?: number;
 };
 
 export function getOrderShippingLabel(order: Pick<Order, 'shipping_address' | 'partner_shipping_id'>) {
@@ -74,6 +96,9 @@ export type OrderLine = {
   product_id: [number, string];
   name: string;
   product_uom_qty: number;
+  qty_ordered?: number;
+  qty_delivered?: number;
+  qty_pending?: number;
   price_unit: number;
   price_subtotal: number;
 };
@@ -113,6 +138,8 @@ type OrderDetailSuccessResponse = {
   success: true;
   order: Order;
   lines: OrderLine[];
+  delivering_now?: DeliveryBucketItem[];
+  coming_later?: DeliveryBucketItem[];
 };
 
 function getApiError(data: { success: boolean; message?: string } | null, fallback: string) {
@@ -121,6 +148,66 @@ function getApiError(data: { success: boolean; message?: string } | null, fallba
   }
 
   return fallback;
+}
+
+function fallbackDeliveryStatus(state: string): DeliveryStatus {
+  switch (state) {
+    case 'cancel':
+      return 'cancelled';
+    case 'done':
+      return 'completed';
+    case 'sale':
+      return 'preparing';
+    case 'draft':
+    case 'sent':
+    default:
+      return 'pending';
+  }
+}
+
+export function getOrderDeliveryStatus(order: Pick<Order, 'state' | 'delivery_status'>): DeliveryStatus {
+  if (order.delivery_status && KNOWN_DELIVERY_STATUSES.includes(order.delivery_status)) {
+    return order.delivery_status;
+  }
+
+  return fallbackDeliveryStatus(order.state);
+}
+
+/** Maps delivery status (preferred) or raw Odoo state to translated labels. */
+export function getStatusLabel(
+  stateOrStatus: string,
+  t: (key: string) => string,
+  deliveryStatus?: DeliveryStatus,
+) {
+  const status = deliveryStatus || (KNOWN_DELIVERY_STATUSES.includes(stateOrStatus as DeliveryStatus)
+    ? (stateOrStatus as DeliveryStatus)
+    : null);
+
+  if (status) {
+    return t(`deliveryStatus.${status}`);
+  }
+
+  return KNOWN_ORDER_STATES.includes(stateOrStatus) ? t(`orderStatus.${stateOrStatus}`) : stateOrStatus;
+}
+
+export function getDeliveryProgressLabel(
+  order: Pick<Order, 'delivering_now_count' | 'coming_later_count' | 'delivery_status' | 'state'>,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+) {
+  const status = getOrderDeliveryStatus(order);
+
+  if (status !== 'partial') {
+    return '';
+  }
+
+  const nowCount = Number(order.delivering_now_count) || 0;
+  const laterCount = Number(order.coming_later_count) || 0;
+
+  if (nowCount <= 0 && laterCount <= 0) {
+    return '';
+  }
+
+  return t('orders.partialProgress', { now: nowCount, later: laterCount });
 }
 
 export async function checkoutOrder(token: string, payload: CheckoutPayload) {
@@ -182,7 +269,12 @@ export async function fetchOrderById(token: string, orderId: number) {
     throw new Error(getApiError(data, 'Failed to load order.'));
   }
 
-  return data;
+  return {
+    order: data.order,
+    lines: data.lines,
+    delivering_now: data.delivering_now || [],
+    coming_later: data.coming_later || [],
+  };
 }
 
 export async function reorderPreviousOrder(token: string, orderId: number) {

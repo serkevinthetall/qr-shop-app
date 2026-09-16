@@ -62,8 +62,11 @@ com.xiaomi.*
 graphify-out/
 
 # Firebase / FCM private keys (never commit)
-credentials/
+# Allow a tracked README so the directory purpose is documented.
+credentials/*
+!credentials/README.md
 *firebase-adminsdk*.json
+*service-account*.json
 
 # Local EAS credentials export (contains secrets)
 credentials.json

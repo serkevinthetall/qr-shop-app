@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { loginWithApi, logoutFromApi } from '@/services/auth-api';
@@ -39,6 +40,10 @@ function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+async function scrubLegacyAsyncSession() {
+  await AsyncStorage.multiRemove([SESSION_KEY, TOKEN_KEY]).catch(() => undefined);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { language } = useLanguage();
   const [user, setUser] = useState<User | null>(null);
@@ -47,16 +52,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const persistSession = useCallback(async (session: Session | null) => {
     if (session) {
-      await AsyncStorage.multiSet([
-        [SESSION_KEY, JSON.stringify(session)],
-        [TOKEN_KEY, session.token],
-      ]);
+      const raw = JSON.stringify(session);
+      await SecureStore.setItemAsync(SESSION_KEY, raw);
+      await SecureStore.setItemAsync(TOKEN_KEY, session.token);
+      // Remove plaintext JWT copies left by older builds.
+      await scrubLegacyAsyncSession();
       setToken(session.token);
       setUser(session.user);
       return;
     }
 
-    await AsyncStorage.multiRemove([SESSION_KEY, TOKEN_KEY, CART_KEY]);
+    // Session/cart only — never clear saved-login (Save password survives Sign Out).
+    await Promise.all([
+      SecureStore.deleteItemAsync(SESSION_KEY).catch(() => undefined),
+      SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => undefined),
+      AsyncStorage.multiRemove([SESSION_KEY, TOKEN_KEY, CART_KEY]).catch(() => undefined),
+    ]);
     setToken(null);
     setUser(null);
   }, []);
@@ -64,32 +75,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const stored = await AsyncStorage.getItem(SESSION_KEY);
+        let session: Session | null = null;
 
-        if (!stored) {
+        try {
+          const secureRaw = await SecureStore.getItemAsync(SESSION_KEY);
+          if (secureRaw) {
+            session = JSON.parse(secureRaw) as Session;
+          }
+        } catch {
+          session = null;
+        }
+
+        if (!session?.token || !session?.user) {
+          const legacyRaw = await AsyncStorage.getItem(SESSION_KEY);
+          if (legacyRaw) {
+            const legacy = JSON.parse(legacyRaw) as Session;
+            if (legacy?.token && legacy?.user) {
+              await persistSession(legacy);
+              return;
+            }
+          }
+          await scrubLegacyAsyncSession();
           return;
         }
 
-        const session = JSON.parse(stored) as Session;
-
-        if (!session.token || !session.user) {
-          await AsyncStorage.multiRemove([SESSION_KEY, TOKEN_KEY]);
-          return;
-        }
-
+        await scrubLegacyAsyncSession();
         setToken(session.token);
         setUser(session.user);
       } catch {
-        await AsyncStorage.multiRemove([SESSION_KEY, TOKEN_KEY]);
-        setToken(null);
-        setUser(null);
+        await persistSession(null);
       } finally {
         setIsLoading(false);
       }
     };
 
-    restoreSession();
-  }, []);
+    void restoreSession();
+  }, [persistSession]);
 
   const signIn = useCallback(
     async (login: string, password: string) => {

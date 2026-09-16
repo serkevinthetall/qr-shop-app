@@ -19,6 +19,7 @@ import {
 } from '@/services/app-config';
 import {
   isServerDownSuppressed,
+  noteServerReachable,
   subscribeServerDown,
   suppressServerDownFor,
 } from '@/services/server-status-events';
@@ -46,9 +47,10 @@ type AppStatusContextValue = {
 const AppStatusContext = createContext<AppStatusContextValue | null>(null);
 
 const CHECK_INTERVAL_MS = 60000;
-const FOREGROUND_GRACE_MS = 3000;
+const FOREGROUND_GRACE_MS = 5000;
 const RESUME_REFRESH_DELAY_MS = 800;
-const STATUS_RETRY_DELAY_MS = 1200;
+const STATUS_RETRY_DELAY_MS = 1500;
+const STATUS_MAX_ATTEMPTS = 3;
 
 export function AppStatusProvider({ children }: { children: React.ReactNode }) {
   const { isOnline } = useNetwork();
@@ -99,7 +101,9 @@ export function AppStatusProvider({ children }: { children: React.ReactNode }) {
     setIsChecking(true);
     setSimulateServerDown(false);
 
-    const maxAttempts = isServerDownSuppressed() ? 2 : 1;
+    const maxAttempts = isServerDownSuppressed()
+      ? STATUS_MAX_ATTEMPTS
+      : STATUS_MAX_ATTEMPTS;
 
     try {
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -111,17 +115,18 @@ export function AppStatusProvider({ children }: { children: React.ReactNode }) {
         }
 
         try {
-          const next = await fetchAppConfig();
+          const next = await fetchAppConfig(45000);
 
           if (!mountedRef.current) {
             return;
           }
 
           setConfig(next);
+          noteServerReachable();
           setServerDown(false);
           return;
         } catch {
-          // Retry once while the app/network is still waking up.
+          // Retry on slow Atom / cold start.
         }
       }
 

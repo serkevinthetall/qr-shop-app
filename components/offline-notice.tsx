@@ -1,53 +1,44 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useRouter, type Href } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppToast } from '@/components/app-toast';
 import { useAppStatus } from '@/contexts/app-status-context';
-import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
 import { useNetwork } from '@/contexts/network-context';
 import { useAppColors } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
-import { quitApp } from '@/utils/quit-app';
+import { exitAppProcess } from '@/utils/quit-app';
 
 /**
- * Offline notice with Quit / Retry.
- * Retry re-checks connectivity. Quit leaves the app.
+ * Offline notice with Retry / Quit.
+ * Retry re-checks connectivity. Quit closes the app without signing out.
  */
 export function OfflineNotice() {
-  const router = useRouter();
   const colors = useAppColors();
   const { rs } = useResponsive();
   const { t, fs, lh } = useLanguage();
-  const { signOut } = useAuth();
   const { isOnline, isChecking, refresh, setSimulateOffline } = useNetwork();
   const { forceUpdateRequired } = useAppStatus();
 
   const [visible, setVisible] = useState(false);
   const [snackbar, setSnackbar] = useState('');
-  const [quitDismissed, setQuitDismissed] = useState(false);
   const [isQuitting, setIsQuitting] = useState(false);
   const wasOfflineRef = useRef(false);
 
   useEffect(() => {
     if (!isOnline) {
       wasOfflineRef.current = true;
-      if (!quitDismissed) {
-        setVisible(true);
-      }
+      setVisible(true);
       return;
     }
-
-    setQuitDismissed(false);
 
     if (wasOfflineRef.current) {
       wasOfflineRef.current = false;
       setVisible(false);
       setSnackbar(t('network.backOnline'));
     }
-  }, [isOnline, quitDismissed, t]);
+  }, [isOnline, t]);
 
   const busy = isChecking || isQuitting;
   const showModal = visible && !isOnline && !forceUpdateRequired;
@@ -57,7 +48,6 @@ export function OfflineNotice() {
       return;
     }
 
-    setQuitDismissed(false);
     const online = await refresh();
 
     if (online) {
@@ -69,20 +59,17 @@ export function OfflineNotice() {
     setSnackbar(t('network.stillOffline'));
   };
 
-  const handleQuit = async () => {
+  const handleQuit = () => {
     if (isQuitting) {
       return;
     }
 
     setIsQuitting(true);
     setSimulateOffline(false);
-    setQuitDismissed(true);
-    setVisible(false);
 
     try {
-      await quitApp(signOut, () => {
-        router.replace('/login' as Href);
-      });
+      // Exit the app only — do not sign out / clear account.
+      exitAppProcess();
     } finally {
       setIsQuitting(false);
     }
@@ -90,13 +77,7 @@ export function OfflineNotice() {
 
   return (
     <>
-      <Modal
-        visible={showModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          handleQuit().catch(() => {});
-        }}>
+      <Modal visible={showModal} transparent animationType="fade" onRequestClose={handleQuit}>
         <View
           style={[
             styles.backdrop,
@@ -147,9 +128,7 @@ export function OfflineNotice() {
               </Pressable>
 
               <Pressable
-                onPress={() => {
-                  handleQuit().catch(() => {});
-                }}
+                onPress={handleQuit}
                 disabled={isQuitting}
                 style={[
                   styles.actionButton,

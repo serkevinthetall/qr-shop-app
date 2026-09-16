@@ -22,6 +22,7 @@ import 'react-native-reanimated';
 
 import { getAppColors } from '@/constants/app-colors';
 import { MYANMAR_FONTS } from '@/constants/fonts';
+import { hydratePreferredApiBase } from '@/constants/api';
 import { NotificationBootstrap } from '@/components/notification-bootstrap';
 import { OfflineNotice } from '@/components/offline-notice';
 import { ForceUpdateModal } from '@/components/force-update-modal';
@@ -34,6 +35,7 @@ import { NetworkProvider } from '@/contexts/network-context';
 import { NotificationProvider } from '@/contexts/notification-context';
 import { ThemeProvider, useThemeMode } from '@/contexts/theme-context';
 import { initAppAnalytics, trackAppOpen } from '@/services/analytics';
+import { initSslPinning } from '@/services/ssl-pinning';
 
 // Map the central app palette onto the React Native Paper theme so Paper
 // components (buttons, inputs, switches, etc.) match the rest of the app.
@@ -58,6 +60,8 @@ function withBrandColors(theme: MD3Theme, isDark: boolean): MD3Theme {
       onTertiaryContainer: c.onPrimaryContainer,
       background: c.background,
       surface: c.surface,
+      onSurface: c.text,
+      onSurfaceVariant: c.textMuted,
       error: c.danger,
       outline: c.border,
     },
@@ -142,6 +146,13 @@ export default function RootLayout() {
     NotoSansMyanmar_600SemiBold,
     NotoSansMyanmar_700Bold,
   });
+
+  useEffect(() => {
+    // Pin API hosts on iOS before any failover probes / auth traffic.
+    void initSslPinning().finally(() => {
+      void hydratePreferredApiBase();
+    });
+  }, []);
 
   useEffect(() => {
     if (fontsLoaded || fontError) {

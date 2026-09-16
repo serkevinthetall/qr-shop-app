@@ -9,6 +9,24 @@ import React, {
   useState,
 } from 'react';
 
+import { getApiBaseUrl } from '@/constants/api';
+
+/**
+ * Myanmar ISPs (Atom, some Wi‑Fi) often block NetInfo's default Google reachability
+ * URL, so the OS reports "no internet" while our Vercel API still works.
+ * Probe our own API instead, and only treat the device as offline when there is
+ * no network interface at all.
+ */
+NetInfo.configure({
+  reachabilityUrl: `${getApiBaseUrl()}/api/app-config`,
+  reachabilityMethod: 'GET',
+  reachabilityTest: async (response) => response.status >= 200 && response.status < 500,
+  reachabilityShortTimeout: 8_000,
+  reachabilityLongTimeout: 20_000,
+  reachabilityRequestTimeout: 15_000,
+  shouldFetchWiFiSSID: false,
+});
+
 type NetworkContextValue = {
   isOnline: boolean;
   isChecking: boolean;
@@ -21,12 +39,9 @@ type NetworkContextValue = {
 const NetworkContext = createContext<NetworkContextValue | null>(null);
 
 function resolveOnline(state: NetInfoState) {
+  // Only the OS link matters. Ignore isInternetReachable — false positives are
+  // common on Myanmar mobile/Wi‑Fi and blocked the whole app incorrectly.
   if (state.isConnected === false) {
-    return false;
-  }
-
-  // Some platforms report connected=true while reachability is still unknown.
-  if (state.isInternetReachable === false) {
     return false;
   }
 
@@ -49,11 +64,14 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
       setRealOnline(resolveOnline(state));
     };
 
-    NetInfo.fetch().then(apply).catch(() => {
-      if (mountedRef.current) {
-        setRealOnline(false);
-      }
-    });
+    NetInfo.fetch()
+      .then(apply)
+      .catch(() => {
+        // Keep assuming online — a NetInfo failure must not lock the shop.
+        if (mountedRef.current) {
+          setRealOnline(true);
+        }
+      });
 
     const unsubscribe = NetInfo.addEventListener(apply);
 
@@ -73,8 +91,8 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
       setRealOnline(online);
       return online;
     } catch {
-      setRealOnline(false);
-      return false;
+      setRealOnline(true);
+      return true;
     } finally {
       setIsChecking(false);
     }

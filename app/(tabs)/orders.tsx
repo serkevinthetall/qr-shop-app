@@ -20,25 +20,27 @@ import { useLanguage } from '@/contexts/language-context';
 import { useAppColors } from '@/contexts/theme-context';
 import { takeOrdersBootstrap } from '@/services/catalog-bootstrap';
 import { searchbarInputStyle } from '@/constants/text-input';
-import { fetchOrderById, fetchOrders, getOrderShippingLabel, getStatusLabel, type Order } from '@/services/order-api';
+import { fetchOrderById, fetchOrders, getDeliveryProgressLabel, getOrderDeliveryStatus, getOrderShippingLabel, getStatusLabel, type DeliveryStatus, type Order } from '@/services/order-api';
 import { formatPrice } from '@/types/product';
 
 type AppColors = ReturnType<typeof useAppColors>;
 type Language = ReturnType<typeof useLanguage>;
 
-type StatusFilter = 'all' | 'pending' | 'completed' | 'cancelled';
+type StatusFilter = 'all' | 'pending' | 'in_progress' | 'completed' | 'cancelled';
 
 const STATUS_FILTERS: { key: StatusFilter; labelKey: string }[] = [
   { key: 'all', labelKey: 'orders.filterAll' },
   { key: 'pending', labelKey: 'orders.filterPending' },
+  { key: 'in_progress', labelKey: 'orders.filterInProgress' },
   { key: 'completed', labelKey: 'orders.filterCompleted' },
   { key: 'cancelled', labelKey: 'orders.filterCancelled' },
 ];
 
-const STATUS_GROUPS: Record<Exclude<StatusFilter, 'all'>, string[]> = {
-  pending: ['draft', 'sent'],
-  completed: ['sale', 'done'],
-  cancelled: ['cancel'],
+const STATUS_GROUPS: Record<Exclude<StatusFilter, 'all'>, DeliveryStatus[]> = {
+  pending: ['pending'],
+  in_progress: ['preparing', 'partial', 'delivered'],
+  completed: ['completed'],
+  cancelled: ['cancelled'],
 };
 
 type DateFilter = 'all' | 'today' | 'week' | 'month' | 'year';
@@ -77,16 +79,18 @@ function getDateThreshold(filter: DateFilter): number | null {
 const MAX_AVATARS = 2;
 const CARD_GAP = 40;
 
-function getStatusBadgeColors(state: string, colors: AppColors) {
-  switch (state) {
-    case 'done':
+function getStatusBadgeColors(status: DeliveryStatus, colors: AppColors) {
+  switch (status) {
+    case 'completed':
+    case 'delivered':
       return { bg: colors.successBg, text: colors.success, border: colors.success };
-    case 'cancel':
+    case 'cancelled':
       return { bg: colors.dangerBg, text: colors.danger, border: colors.danger };
-    case 'sale':
+    case 'partial':
       return { bg: colors.primaryMuted, text: colors.primary, border: colors.primary };
-    case 'draft':
-    case 'sent':
+    case 'preparing':
+      return { bg: colors.primaryMuted, text: colors.primary, border: colors.primary };
+    case 'pending':
     default:
       return { bg: colors.inputBg, text: colors.textMuted, border: colors.border };
   }
@@ -189,9 +193,11 @@ function OrderCard({
       : itemCount === 1
         ? lang.t('orders.itemCountOne')
         : lang.t('orders.itemsCount', { count: itemCount });
-  const statusBadge = getStatusBadgeColors(order.state, colors);
+  const deliveryStatus = getOrderDeliveryStatus(order);
+  const statusBadge = getStatusBadgeColors(deliveryStatus, colors);
   const shippingLabel = getOrderShippingLabel(order);
   const shippingPreview = shippingLabel.split('\n').filter(Boolean).slice(0, 2).join(' · ');
+  const partialProgress = getDeliveryProgressLabel(order, lang.t);
 
   return (
     <Pressable
@@ -227,7 +233,7 @@ function OrderCard({
                 styles.statusBadgeText,
                 { color: statusBadge.text, fontSize: lang.fs(11), lineHeight: lang.lh(11) },
               ]}>
-              {getStatusLabel(order.state, lang.t)}
+              {getStatusLabel(order.state, lang.t, deliveryStatus)}
             </Text>
           </View>
         </View>
@@ -247,6 +253,14 @@ function OrderCard({
             {shippingPreview}
           </Text>
         </View>
+      ) : null}
+
+      {partialProgress ? (
+        <Text
+          numberOfLines={1}
+          style={[styles.partialProgress, { color: colors.primary, fontSize: lang.fs(12), lineHeight: lang.lh(12) }]}>
+          {partialProgress}
+        </Text>
       ) : null}
 
       {/* Row 2 — items left, price + view details stacked on the right */}
@@ -360,7 +374,7 @@ export default function OrdersScreen() {
     const threshold = getDateThreshold(dateFilter);
     return orders.filter((order) => {
       if (query && !order.name.toLowerCase().includes(query)) return false;
-      if (statusFilter !== 'all' && !STATUS_GROUPS[statusFilter].includes(order.state)) return false;
+      if (statusFilter !== 'all' && !STATUS_GROUPS[statusFilter].includes(getOrderDeliveryStatus(order))) return false;
       if (threshold !== null && new Date(order.date_order).getTime() < threshold) return false;
       return true;
     });
@@ -549,6 +563,10 @@ const styles = StyleSheet.create({
   addressText: {
     flex: 1,
     fontWeight: '500',
+  },
+  partialProgress: {
+    marginTop: 8,
+    fontWeight: '700',
   },
   dateWrap: {
     flex: 1,

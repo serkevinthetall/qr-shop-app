@@ -392,9 +392,11 @@ export default function CheckoutScreen() {
               style={[styles.couponSelectRow, couponTooLow && styles.couponSelectRowDisabled]}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: useCoupon, disabled: couponTooLow }}>
-              <Checkbox
+              <Checkbox.Android
                 status={useCoupon ? 'checked' : 'unchecked'}
                 disabled={couponTooLow}
+                color={colors.primary}
+                uncheckedColor={colors.textMuted}
                 onPress={() => {
                   if (couponTooLow) {
                     return;

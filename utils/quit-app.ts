@@ -2,18 +2,11 @@ import Constants from 'expo-constants';
 import { BackHandler, Platform } from 'react-native';
 
 /**
- * End the session and leave the app when possible.
- * Expo Go / iOS cannot kill the process — navigation to login is the fallback.
+ * Close the app process when the OS allows it.
+ * Does not sign the user out — session stays for the next launch.
+ * Expo Go / iOS cannot kill the process (Apple forbids it).
  */
-export async function quitApp(signOut: () => Promise<void>, goLogin: () => void) {
-  try {
-    await signOut();
-  } catch {
-    // Continue even if logout API fails.
-  }
-
-  goLogin();
-
+export function exitAppProcess() {
   const inExpoGo = Constants.appOwnership === 'expo';
 
   if (Platform.OS === 'android' && !inExpoGo) {

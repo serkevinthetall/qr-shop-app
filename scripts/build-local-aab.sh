@@ -4,8 +4,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Contents/Home}"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
-export EXPO_PUBLIC_API_BASE_URL="${EXPO_PUBLIC_API_BASE_URL:-https://qr-shop-app-backend.vercel.app}"
+export PATH="$JAVA_HOME/bin:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:$PATH"
+export EXPO_PUBLIC_API_BASE_URL="${EXPO_PUBLIC_API_BASE_URL:-https://www.qrshop.online}"
+export EXPO_PUBLIC_API_FALLBACK_URL="${EXPO_PUBLIC_API_FALLBACK_URL:-https://qrshopmyanmar.netlify.app}"
 export ORG_GRADLE_JVMARGS="${ORG_GRADLE_JVMARGS:--Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8}"
+
+if [[ ! -x "$JAVA_HOME/bin/java" ]]; then
+  echo "Java not found at: $JAVA_HOME"
+  echo "Install Android Studio or set JAVA_HOME to a JDK 17+."
+  exit 1
+fi
 
 KEYSTORE_PROPS="$ROOT/android/keystore.properties"
 if [[ ! -f "$KEYSTORE_PROPS" ]]; then

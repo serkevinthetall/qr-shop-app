@@ -5,12 +5,20 @@ const listeners = new Set<ServerDownListener>();
 /** Ignore server-down signals until this timestamp (resume/network warm-up). */
 let suppressUntil = 0;
 
+/** Require a few hard failures before locking the UI (Atom is flaky/slow). */
+let failureStreak = 0;
+const FAILURES_BEFORE_MODAL = 3;
+
 export function suppressServerDownFor(ms: number) {
   suppressUntil = Math.max(suppressUntil, Date.now() + ms);
 }
 
 export function isServerDownSuppressed() {
   return Date.now() < suppressUntil;
+}
+
+export function noteServerReachable() {
+  failureStreak = 0;
 }
 
 export function subscribeServerDown(listener: ServerDownListener) {
@@ -23,6 +31,11 @@ export function subscribeServerDown(listener: ServerDownListener) {
 
 export function emitServerDown() {
   if (isServerDownSuppressed()) {
+    return;
+  }
+
+  failureStreak += 1;
+  if (failureStreak < FAILURES_BEFORE_MODAL) {
     return;
   }
 

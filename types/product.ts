@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '@/constants/api';
+import { getApiBaseUrl } from '@/constants/api';
 
 export type CategoryRef = [number, string] | false;
 
@@ -82,11 +82,11 @@ export function getProductImageUri(product: Pick<Product, 'id' | 'image_url' | '
 
     if (url.startsWith('/')) {
       if (url.includes('?v=')) {
-        return `${API_BASE_URL}${url}`;
+        return `${getApiBaseUrl()}${url}`;
       }
 
       const version = getImageVersion(product.write_date);
-      return `${API_BASE_URL}${url}?v=${version}`;
+      return `${getApiBaseUrl()}${url}?v=${version}`;
     }
 
     return url;
@@ -97,7 +97,7 @@ export function getProductImageUri(product: Pick<Product, 'id' | 'image_url' | '
   }
 
   const version = getImageVersion(product.write_date);
-  return `${API_BASE_URL}/api/products/${product.id}/image?v=${version}`;
+  return `${getApiBaseUrl()}/api/products/${product.id}/image?v=${version}`;
 }
 
 export function getProductImageCacheKey(product: Pick<Product, 'id' | 'write_date'>) {

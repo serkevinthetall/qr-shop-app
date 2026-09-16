@@ -1,26 +1,21 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useRouter, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppStatus } from '@/contexts/app-status-context';
-import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
 import { useNetwork } from '@/contexts/network-context';
 import { useAppColors } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
-import { quitApp } from '@/utils/quit-app';
+import { exitAppProcess } from '@/utils/quit-app';
 
 /** Shown when the device is online but the QR Shop API is unreachable. */
 export function ServerDownNotice() {
-  const router = useRouter();
   const colors = useAppColors();
   const { rs } = useResponsive();
   const { t, fs, lh } = useLanguage();
-  const { signOut } = useAuth();
   const { isOnline } = useNetwork();
-  const { serverDown, forceUpdateRequired, isChecking, refreshStatus, dismissServerDown } =
-    useAppStatus();
+  const { serverDown, forceUpdateRequired, isChecking, refreshStatus } = useAppStatus();
   const [isQuitting, setIsQuitting] = useState(false);
 
   const visible = serverDown && isOnline && !forceUpdateRequired;
@@ -34,31 +29,23 @@ export function ServerDownNotice() {
     await refreshStatus();
   };
 
-  const handleQuit = async () => {
+  const handleQuit = () => {
     if (isQuitting) {
       return;
     }
 
     setIsQuitting(true);
-    dismissServerDown();
 
     try {
-      await quitApp(signOut, () => {
-        router.replace('/login' as Href);
-      });
+      // Exit the app only — do not sign out / clear account.
+      exitAppProcess();
     } finally {
       setIsQuitting(false);
     }
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={() => {
-        handleQuit().catch(() => {});
-      }}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleQuit}>
       <View
         style={[
           styles.backdrop,
@@ -86,6 +73,14 @@ export function ServerDownNotice() {
             {t('network.serverDownBody')}
           </Text>
 
+          <Text
+            style={[
+              styles.tip,
+              { color: colors.textMuted, fontSize: fs(rs(12)), lineHeight: lh(12) },
+            ]}>
+            {t('network.serverDownDnsTip')}
+          </Text>
+
           <View style={styles.actions}>
             <Pressable
               onPress={() => {
@@ -106,9 +101,7 @@ export function ServerDownNotice() {
             </Pressable>
 
             <Pressable
-              onPress={() => {
-                handleQuit().catch(() => {});
-              }}
+              onPress={handleQuit}
               disabled={isQuitting}
               style={[
                 styles.actionButton,
@@ -168,7 +161,13 @@ const styles = StyleSheet.create({
   body: {
     fontWeight: '500',
     textAlign: 'center',
+    marginBottom: 12,
+  },
+  tip: {
+    fontWeight: '500',
+    textAlign: 'center',
     marginBottom: 20,
+    opacity: 0.9,
   },
   actions: {
     width: '100%',
