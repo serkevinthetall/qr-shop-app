@@ -60,6 +60,8 @@ export type Order = {
   delivery_status?: DeliveryStatus;
   delivering_now_count?: number;
   coming_later_count?: number;
+  product_preview?: DeliveryBucketItem[];
+  product_preview_count?: number;
 };
 
 export function getOrderShippingLabel(order: Pick<Order, 'shipping_address' | 'partner_shipping_id'>) {
