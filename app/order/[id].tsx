@@ -100,6 +100,18 @@ export default function OrderDetailScreen() {
   const shippingLabel = getOrderShippingLabel(order);
   const statusBadge = getStatusBadgeColors(deliveryStatus, colors);
   const showDeliverySplit = deliveryStatus === 'partial' || deliveryStatus === 'preparing' || deliveryStatus === 'delivered';
+  const deliveryProducts = lines
+    .filter((line) => (Number(line.product_uom_qty) || 0) > 0 && (Number(line.price_subtotal) || 0) >= 0)
+    .filter((line) => {
+      const name = String(line.name || '').replace(/^\[[^\]]*\]\s*/, '').trim().toLowerCase();
+      return name !== 'delivery';
+    })
+    .map((line) => ({
+      id: line.id,
+      name: line.name,
+      qty: Number(line.product_uom_qty) || 0,
+      qtyDelivered: typeof line.qty_delivered === 'number' ? line.qty_delivered : null,
+    }));
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -206,6 +218,41 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
+        {deliveryProducts.length > 0 ? (
+          <View
+            style={[
+              styles.deliverySection,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.text, fontSize: fs(16), lineHeight: lh(16), marginBottom: 10 },
+              ]}>
+              {t('orderDetail.deliveryProducts')}
+            </Text>
+            {deliveryProducts.map((item) => (
+              <View key={item.id} style={styles.deliveryRow}>
+                <Text
+                  style={[styles.deliveryName, { color: colors.text, fontSize: fs(14), lineHeight: lh(14) }]}
+                  numberOfLines={2}>
+                  {item.name}
+                </Text>
+                <View style={styles.deliveryQtyCol}>
+                  <Text style={[styles.deliveryQty, { color: colors.text, fontSize: fs(14), lineHeight: lh(14) }]}>
+                    {t('orderDetail.orderedQty')} × {item.qty}
+                  </Text>
+                  {item.qtyDelivered !== null ? (
+                    <Text style={[styles.deliveryQty, { color: colors.textMuted, fontSize: fs(12), lineHeight: lh(12) }]}>
+                      {t('orderDetail.deliveredQty')} × {item.qtyDelivered}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         {showDeliverySplit ? (
           <>
             {deliveringNow.length > 0 ? (
@@ -263,9 +310,9 @@ export default function OrderDetailScreen() {
               </Text>
             </View>
             <Text style={[styles.lineMeta, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
-              {t('orderDetail.qty')}: {line.product_uom_qty} × {formatPrice(line.price_unit)}
-              {typeof line.qty_delivered === 'number' && typeof line.qty_pending === 'number' && line.qty_pending > 0
-                ? ` · ${line.qty_delivered}/${line.product_uom_qty}`
+              {t('orderDetail.orderedQty')}: {line.product_uom_qty} × {formatPrice(line.price_unit)}
+              {typeof line.qty_delivered === 'number'
+                ? ` · ${t('orderDetail.deliveredQty')}: ${line.qty_delivered}/${line.product_uom_qty}`
                 : ''}
             </Text>
           </View>
@@ -509,6 +556,10 @@ const styles = StyleSheet.create({
   },
   deliveryQty: {
     fontWeight: '700',
+  },
+  deliveryQtyCol: {
+    alignItems: 'flex-end',
+    gap: 2,
   },
   deliveryHint: {
     marginTop: 4,
