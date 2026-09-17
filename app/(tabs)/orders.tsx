@@ -44,7 +44,7 @@ const STATUS_FILTERS: { key: StatusFilter; labelKey: string }[] = [
 
 const STATUS_GROUPS: Record<Exclude<StatusFilter, 'all'>, DeliveryStatus[]> = {
   pending: ['pending'],
-  in_progress: ['preparing', 'partial', 'delivered'],
+  in_progress: ['preparing', 'out_for_delivery', 'partial', 'delivered'],
   completed: ['completed'],
   cancelled: ['cancelled'],
 };

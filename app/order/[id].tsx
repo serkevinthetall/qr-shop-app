@@ -17,6 +17,7 @@ import {
   type DeliveryBucketItem,
   type DeliveryStatus,
   type Order,
+  type OrderDelivery,
   type OrderLine,
 } from '@/services/order-api';
 import { formatPrice } from '@/types/product';
@@ -30,12 +31,34 @@ function getStatusBadgeColors(status: DeliveryStatus, colors: AppColors) {
       return { bg: colors.successBg, text: colors.success, border: colors.success };
     case 'cancelled':
       return { bg: colors.dangerBg, text: colors.danger, border: colors.danger };
+    case 'out_for_delivery':
     case 'partial':
     case 'preparing':
       return { bg: colors.primaryMuted, text: colors.primary, border: colors.primary };
     case 'pending':
     default:
       return { bg: colors.inputBg, text: colors.textMuted, border: colors.border };
+  }
+}
+
+function getPickingStateLabel(
+  delivery: OrderDelivery,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+) {
+  switch (String(delivery.state)) {
+    case 'done':
+      return t('orderDetail.deliveryDone');
+    case 'cancel':
+      return t('orderDetail.deliveryCancelled');
+    case 'assigned':
+      return t('orderDetail.deliveryReady');
+    case 'confirmed':
+    case 'waiting':
+      return t('orderDetail.deliveryWaiting');
+    case 'draft':
+      return t('orderDetail.deliveryDraft');
+    default:
+      return delivery.state_label || delivery.state;
   }
 }
 
@@ -51,6 +74,7 @@ export default function OrderDetailScreen() {
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [deliveringNow, setDeliveringNow] = useState<DeliveryBucketItem[]>([]);
   const [comingLater, setComingLater] = useState<DeliveryBucketItem[]>([]);
+  const [deliveries, setDeliveries] = useState<OrderDelivery[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -65,6 +89,7 @@ export default function OrderDetailScreen() {
         setLines(data.lines);
         setDeliveringNow(data.delivering_now);
         setComingLater(data.coming_later);
+        setDeliveries(data.deliveries);
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : 'Failed to load order.');
@@ -99,19 +124,18 @@ export default function OrderDetailScreen() {
   const deliveryStatus = getOrderDeliveryStatus(order);
   const shippingLabel = getOrderShippingLabel(order);
   const statusBadge = getStatusBadgeColors(deliveryStatus, colors);
-  const showDeliverySplit = deliveryStatus === 'partial' || deliveryStatus === 'preparing' || deliveryStatus === 'delivered';
-  const deliveryProducts = lines
-    .filter((line) => (Number(line.product_uom_qty) || 0) > 0 && (Number(line.price_subtotal) || 0) >= 0)
-    .filter((line) => {
-      const name = String(line.name || '').replace(/^\[[^\]]*\]\s*/, '').trim().toLowerCase();
-      return name !== 'delivery';
-    })
-    .map((line) => ({
-      id: line.id,
-      name: line.name,
-      qty: Number(line.product_uom_qty) || 0,
-      qtyDelivered: typeof line.qty_delivered === 'number' ? line.qty_delivered : null,
-    }));
+  const showDeliverySplit =
+    deliveryStatus === 'partial' ||
+    deliveryStatus === 'preparing' ||
+    deliveryStatus === 'out_for_delivery' ||
+    deliveryStatus === 'delivered';
+  const deliveryDocs = deliveries.length > 0 ? deliveries : order.deliveries || [];
+  const deliveryTitle =
+    deliveryDocs.length === 1
+      ? t('orderDetail.deliveryCount', { count: 1 })
+      : deliveryDocs.length > 1
+        ? t('orderDetail.deliveryCountPlural', { count: deliveryDocs.length })
+        : t('orderDetail.deliveries');
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -218,38 +242,80 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
-        {deliveryProducts.length > 0 ? (
-          <View
-            style={[
-              styles.deliverySection,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}>
-            <Text
-              style={[
-                styles.sectionTitle,
-                { color: colors.text, fontSize: fs(16), lineHeight: lh(16), marginBottom: 10 },
-              ]}>
-              {t('orderDetail.deliveryProducts')}
-            </Text>
-            {deliveryProducts.map((item) => (
-              <View key={item.id} style={styles.deliveryRow}>
-                <Text
-                  style={[styles.deliveryName, { color: colors.text, fontSize: fs(14), lineHeight: lh(14) }]}
-                  numberOfLines={2}>
-                  {item.name}
-                </Text>
-                <View style={styles.deliveryQtyCol}>
-                  <Text style={[styles.deliveryQty, { color: colors.text, fontSize: fs(14), lineHeight: lh(14) }]}>
-                    {t('orderDetail.orderedQty')} × {item.qty}
+        {(deliveryStatus !== 'pending' && deliveryStatus !== 'cancelled') || deliveryDocs.length > 0 ? (
+          <View style={[styles.deliveryDocsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.deliveryDocsHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16), marginBottom: 0 }]}>
+                {deliveryTitle}
+              </Text>
+              {deliveryDocs.length > 0 ? (
+                <View style={[styles.deliveryCountPill, { backgroundColor: colors.primaryMuted, borderColor: colors.primary }]}>
+                  <Text style={{ color: colors.primary, fontSize: fs(12), lineHeight: lh(12), fontWeight: '700' }}>
+                    {deliveryDocs.length}
                   </Text>
-                  {item.qtyDelivered !== null ? (
-                    <Text style={[styles.deliveryQty, { color: colors.textMuted, fontSize: fs(12), lineHeight: lh(12) }]}>
-                      {t('orderDetail.deliveredQty')} × {item.qtyDelivered}
-                    </Text>
-                  ) : null}
                 </View>
-              </View>
-            ))}
+              ) : null}
+            </View>
+
+            {deliveryDocs.length === 0 ? (
+              <Text style={[styles.deliveryHint, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
+                {t('orderDetail.noDeliveriesYet')}
+              </Text>
+            ) : (
+              deliveryDocs.map((delivery) => (
+                <View
+                  key={delivery.id}
+                  style={[styles.deliveryDocRow, { borderTopColor: colors.border }]}>
+                  <View style={styles.deliveryDocMain}>
+                    <Text
+                      style={[styles.deliveryDocName, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}
+                      numberOfLines={1}>
+                      {delivery.name}
+                    </Text>
+                    {delivery.scheduled_date || delivery.date_done ? (
+                      <Text style={{ color: colors.textMuted, fontSize: fs(12), lineHeight: lh(12) }}>
+                        {delivery.date_done
+                          ? new Date(String(delivery.date_done).replace(' ', 'T')).toLocaleString()
+                          : new Date(String(delivery.scheduled_date).replace(' ', 'T')).toLocaleString()}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <View
+                    style={[
+                      styles.pickingBadge,
+                      {
+                        backgroundColor:
+                          delivery.state === 'done'
+                            ? colors.successBg
+                            : delivery.state === 'cancel'
+                              ? colors.dangerBg
+                              : colors.primaryMuted,
+                        borderColor:
+                          delivery.state === 'done'
+                            ? colors.success
+                            : delivery.state === 'cancel'
+                              ? colors.danger
+                              : colors.primary,
+                      },
+                    ]}>
+                    <Text
+                      style={{
+                        color:
+                          delivery.state === 'done'
+                            ? colors.success
+                            : delivery.state === 'cancel'
+                              ? colors.danger
+                              : colors.primary,
+                        fontSize: fs(11),
+                        lineHeight: lh(11),
+                        fontWeight: '700',
+                      }}>
+                      {getPickingStateLabel(delivery, t)}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            )}
           </View>
         ) : null}
 
@@ -258,7 +324,7 @@ export default function OrderDetailScreen() {
             {deliveringNow.length > 0 ? (
               <DeliverySection
                 title={
-                  deliveryStatus === 'delivered' || deliveryStatus === 'completed'
+                  deliveryStatus === 'delivered'
                     ? t('orderDetail.deliveredItems')
                     : t('orderDetail.deliveringNow')
                 }
@@ -310,9 +376,9 @@ export default function OrderDetailScreen() {
               </Text>
             </View>
             <Text style={[styles.lineMeta, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
-              {t('orderDetail.orderedQty')}: {line.product_uom_qty} × {formatPrice(line.price_unit)}
-              {typeof line.qty_delivered === 'number'
-                ? ` · ${t('orderDetail.deliveredQty')}: ${line.qty_delivered}/${line.product_uom_qty}`
+              {t('orderDetail.qty')}: {line.product_uom_qty} × {formatPrice(line.price_unit)}
+              {typeof line.qty_delivered === 'number' && typeof line.qty_pending === 'number' && line.qty_pending > 0
+                ? ` · ${line.qty_delivered}/${line.product_uom_qty}`
                 : ''}
             </Text>
           </View>
@@ -537,6 +603,51 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 12,
   },
+  deliveryDocsCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+  },
+  deliveryDocsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 10,
+  },
+  deliveryCountPill: {
+    minWidth: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  deliveryDocRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  deliveryDocMain: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  deliveryDocName: {
+    fontWeight: '700',
+  },
+  pickingBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    flexShrink: 0,
+  },
   deliverySection: {
     borderWidth: 1,
     borderRadius: 14,
@@ -556,10 +667,6 @@ const styles = StyleSheet.create({
   },
   deliveryQty: {
     fontWeight: '700',
-  },
-  deliveryQtyCol: {
-    alignItems: 'flex-end',
-    gap: 2,
   },
   deliveryHint: {
     marginTop: 4,

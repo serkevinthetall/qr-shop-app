@@ -3,6 +3,7 @@ import { orderRequest } from '@/services/order-client';
 export type DeliveryStatus =
   | 'pending'
   | 'preparing'
+  | 'out_for_delivery'
   | 'partial'
   | 'delivered'
   | 'completed'
@@ -12,6 +13,7 @@ const KNOWN_ORDER_STATES = ['draft', 'sent', 'sale', 'done', 'cancel'];
 const KNOWN_DELIVERY_STATUSES: DeliveryStatus[] = [
   'pending',
   'preparing',
+  'out_for_delivery',
   'partial',
   'delivered',
   'completed',
@@ -43,6 +45,18 @@ export type DeliveryBucketItem = {
   qty: number;
 };
 
+/** Odoo stock.picking row — same docs as Sale → Delivery smart button. */
+export type OrderDelivery = {
+  id: number;
+  name: string;
+  sequence: number;
+  state: string;
+  state_label: string;
+  scheduled_date?: string | null;
+  date_done?: string | null;
+  origin?: string | null;
+};
+
 export type Order = {
   id: number;
   name: string;
@@ -54,6 +68,7 @@ export type Order = {
   partner_shipping_id?: [number, string] | false;
   shipping_address?: OrderShippingAddress | null;
   order_line?: number[];
+  picking_ids?: number[];
   x_studio_preferred_delivery_date?: string | false;
   x_studio_delivery_notes?: string | false;
   note?: string | false;
@@ -62,6 +77,8 @@ export type Order = {
   coming_later_count?: number;
   product_preview?: DeliveryBucketItem[];
   product_preview_count?: number;
+  delivery_count?: number;
+  deliveries?: OrderDelivery[];
 };
 
 export function getOrderShippingLabel(order: Pick<Order, 'shipping_address' | 'partner_shipping_id'>) {
@@ -142,6 +159,7 @@ type OrderDetailSuccessResponse = {
   lines: OrderLine[];
   delivering_now?: DeliveryBucketItem[];
   coming_later?: DeliveryBucketItem[];
+  deliveries?: OrderDelivery[];
 };
 
 function getApiError(data: { success: boolean; message?: string } | null, fallback: string) {
@@ -276,6 +294,7 @@ export async function fetchOrderById(token: string, orderId: number) {
     lines: data.lines,
     delivering_now: data.delivering_now || [],
     coming_later: data.coming_later || [],
+    deliveries: data.deliveries || data.order.deliveries || [],
   };
 }
 
