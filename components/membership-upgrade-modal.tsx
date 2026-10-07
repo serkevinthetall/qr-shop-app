@@ -3,9 +3,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button } from 'react-native-paper';
 
+import { LiquidSurface } from '@/components/liquid-surface';
 import { useLanguage } from '@/contexts/language-context';
-import { useAppColors } from '@/contexts/theme-context';
+import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
+import { withHapticPress } from '@/utils/haptics';
+import { isLiquidUiEnabled, liquidGlassBorder, liquidGlassFill } from '@/utils/liquid-ui';
 
 export type UpgradePlan = 'premium' | 'pro';
 
@@ -29,8 +32,12 @@ export function MembershipUpgradeModal({
   onSelectPlan,
 }: MembershipUpgradeModalProps) {
   const colors = useAppColors();
+  const { isDark } = useThemeMode();
   const { rs } = useResponsive();
   const { t, fs } = useLanguage();
+  const liquid = isLiquidUiEnabled();
+  const cardBorder = liquid ? liquidGlassBorder(isDark) : colors.border;
+  const nestedFill = liquid ? liquidGlassFill(isDark) : colors.inputBg;
   const [previewPlan, setPreviewPlan] = useState<UpgradePlan>('pro');
 
   useEffect(() => {
@@ -68,20 +75,24 @@ export function MembershipUpgradeModal({
           styles.backdrop,
           { backgroundColor: colors.isDark ? 'rgba(0,0,0,0.72)' : 'rgba(15,23,42,0.4)' },
         ]}>
-        <View
+        <LiquidSurface
           style={[
             styles.card,
             {
-              backgroundColor: colors.card,
+              borderWidth: liquid ? 1 : 0,
+              borderColor: cardBorder,
               shadowColor: colors.shadow,
             },
-          ]}>
+          ]}
+          backgroundColor={colors.card}
+          glassStyle="regular"
+          interactive>
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.text, fontSize: fs(rs(17)) }]}>
               {t('account.upgradeChooseTitle')}
             </Text>
             <Pressable
-              onPress={onClose}
+              onPress={withHapticPress(onClose)}
               hitSlop={10}
               disabled={isSubmitting}
               accessibilityRole="button"
@@ -91,9 +102,9 @@ export function MembershipUpgradeModal({
           </View>
 
           <View style={styles.plansBody}>
-            <View style={[styles.segment, { backgroundColor: colors.inputBg }]}>
+            <View style={[styles.segment, { backgroundColor: nestedFill }]}>
               <Pressable
-                onPress={() => setPreviewPlan('pro')}
+                onPress={withHapticPress(() => setPreviewPlan('pro'))}
                 disabled={isSubmitting}
                 style={[
                   styles.segmentItem,
@@ -113,7 +124,7 @@ export function MembershipUpgradeModal({
                 </Text>
               </Pressable>
               <Pressable
-                onPress={() => setPreviewPlan('premium')}
+                onPress={withHapticPress(() => setPreviewPlan('premium'))}
                 disabled={isSubmitting}
                 style={[
                   styles.segmentItem,
@@ -134,12 +145,22 @@ export function MembershipUpgradeModal({
               </Pressable>
             </View>
 
-            <View style={[styles.planBox, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+            <LiquidSurface
+              style={[styles.planBox, { borderColor: cardBorder }]}
+              backgroundColor={colors.inputBg}
+              glassStyle="regular"
+              interactive>
               <Text style={[styles.planBoxTitle, { color: colors.text, fontSize: fs(rs(16)) }]}>
                 {activePlan === 'pro' ? t('account.upgradeProTitle') : t('account.upgradePremiumTitle')}
               </Text>
 
-              <View style={[styles.priceChip, { backgroundColor: colors.primaryMuted }]}>
+              <View
+                style={[
+                  styles.priceChip,
+                  {
+                    backgroundColor: liquid ? liquidGlassFill(isDark) : colors.primaryMuted,
+                  },
+                ]}>
                 <Text style={[styles.priceChipText, { color: colors.primary, fontSize: fs(rs(13)) }]}>
                   {planPrice}
                 </Text>
@@ -147,18 +168,23 @@ export function MembershipUpgradeModal({
 
               {benefits.map((benefit) => (
                 <View key={benefit} style={styles.benefitRow}>
-                  <MaterialCommunityIcons name="check-circle" size={18} color={colors.primary} style={styles.benefitIcon} />
+                  <MaterialCommunityIcons
+                    name="check-circle"
+                    size={18}
+                    color={colors.primary}
+                    style={styles.benefitIcon}
+                  />
                   <Text style={[styles.benefitText, { color: colors.text, fontSize: fs(rs(13)) }]}>
                     {benefit}
                   </Text>
                 </View>
               ))}
-            </View>
+            </LiquidSurface>
 
             <Button
               mode="contained"
               icon="arrow-right"
-              onPress={() => onSelectPlan(activePlan)}
+              onPress={withHapticPress(() => onSelectPlan(activePlan), 'medium')}
               loading={isSubmitting}
               disabled={isSubmitting}
               style={styles.submitButton}
@@ -167,7 +193,7 @@ export function MembershipUpgradeModal({
               {t('account.upgradeSubmit')}
             </Button>
           </View>
-        </View>
+        </LiquidSurface>
       </View>
     </Modal>
   );
@@ -191,6 +217,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 24,
     elevation: 10,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',

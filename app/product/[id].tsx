@@ -2,32 +2,40 @@ import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from 'react-native-paper';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 
 import { AppToast } from '@/components/app-toast';
+import { InlineErrorBanner } from '@/components/inline-error-banner';
+import { LiquidSurface } from '@/components/liquid-surface';
+import { ProductCard } from '@/components/products/product-card';
 import { ProductDetailSkeleton, SimilarProductsSkeleton } from '@/components/products/product-card-skeleton';
 import { QuantityStepper } from '@/components/quantity-stepper';
 import { useCart } from '@/contexts/cart-context';
 import { useAuth } from '@/contexts/auth-context';
 import { ProductRibbonBadge } from '@/components/products/product-ribbon';
 import { useLanguage } from '@/contexts/language-context';
-import { useAppColors } from '@/contexts/theme-context';
+import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import { onCatalogRefreshRequested } from '@/services/catalog-events';
+import { getUserFacingError } from '@/services/auth-error';
 import { fetchProductById } from '@/services/product-api';
 import { getProductPreview, rememberProductPreview } from '@/services/product-preview-cache';
 import type { Product } from '@/types/product';
 import { formatPrice, getProductImageUri } from '@/types/product';
+import { hapticSuccess } from '@/utils/haptics';
+import { isLiquidUiEnabled, liquidDetailHeaderTint, liquidGlassFill } from '@/utils/liquid-ui';
 import { getProductDescription, getProductDescriptionSections } from '@/utils/product-text';
 
 export default function ProductDetailScreen() {
   const router = useRouter();
   const colors = useAppColors();
+  const { isDark } = useThemeMode();
+  const insets = useSafeAreaInsets();
   const { rs } = useResponsive();
-  const { fs, lh, language } = useLanguage();
+  const { fs, lh, language, t } = useLanguage();
   const { token } = useAuth();
   const { addToCart } = useCart();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -44,7 +52,7 @@ export default function ProductDetailScreen() {
           loadingDescription: 'ဖော်ပြချက် ရယူနေသည်…',
           similar: 'ဆင်တူ ပစ္စည်းများ',
           addToCart: 'ခြင်းထဲ ထည့်ရန်',
-          notFound: 'ပစ္စည်း မတွေ့ပါ။',
+          notFound: t('errors.productNotFound'),
           added: 'စျေးခြင်းထဲ ထည့်ပြီးပါပြီ',
         }
       : {
@@ -56,7 +64,7 @@ export default function ProductDetailScreen() {
           loadingDescription: 'Loading description…',
           similar: 'Similar Products',
           addToCart: 'Add to Cart',
-          notFound: 'Product not found.',
+          notFound: t('errors.productNotFound'),
           added: 'Added to cart',
         };
 
@@ -110,9 +118,7 @@ export default function ProductDetailScreen() {
           setIsLoading(false);
         } else if (!options?.silent && !hasPreview) {
           setProduct(null);
-          setError(
-            languageRef.current === 'my' ? 'ပစ္စည်း မတွေ့ပါ။' : 'Product not found.',
-          );
+          setError(t('errors.productNotFound'));
           setDetailsLoaded(true);
           setIsLoading(false);
           setSimilarLoading(false);
@@ -141,7 +147,8 @@ export default function ProductDetailScreen() {
         }
 
         if (!options?.silent && !hasPreview && !getProductPreview(productId)) {
-          setError(err instanceof Error ? err.message : 'Failed to load product.');
+          const message = getUserFacingError(err, t('errors.loadProduct'), t);
+          if (message) setError(message);
         }
       } finally {
         if (generation === requestGenerationRef.current) {
@@ -151,7 +158,7 @@ export default function ProductDetailScreen() {
         }
       }
     },
-    [productId, token],
+    [productId, token, t],
   );
 
   useEffect(() => {
@@ -189,6 +196,7 @@ export default function ProductDetailScreen() {
     }
 
     Keyboard.dismiss();
+    hapticSuccess();
     addToCart(product, quantity);
     setSnackbar(labels.added);
   };
@@ -215,9 +223,20 @@ export default function ProductDetailScreen() {
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.centeredContent}>
-          <Text style={[styles.errorText, { color: colors.danger, lineHeight: lh(14) }]}>
-            {error || labels.notFound}
-          </Text>
+          {error ? (
+            <InlineErrorBanner
+              message={error}
+              onRetry={() => {
+                void loadProduct();
+              }}
+              onDismiss={() => setError('')}
+              style={{ marginHorizontal: 0, alignSelf: 'stretch' }}
+            />
+          ) : (
+            <Text style={[styles.errorText, { color: colors.danger, lineHeight: lh(14) }]}>
+              {labels.notFound}
+            </Text>
+          )}
           <Button onPress={() => router.back()}>{labels.back}</Button>
         </View>
       </SafeAreaView>
@@ -226,23 +245,41 @@ export default function ProductDetailScreen() {
 
   const description = getProductDescription(product);
   const { longDescription, internalNotes } = getProductDescriptionSections(product);
+  const liquid = isLiquidUiEnabled();
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView
+      style={[styles.screen, { backgroundColor: colors.background }]}
+      edges={liquid ? [] : ['top', 'bottom']}>
       <KeyboardAvoidingView
         style={styles.screen}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}>
-        <View style={[styles.headerBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <LiquidSurface
+          style={[
+            styles.headerBar,
+            {
+              borderBottomWidth: liquid ? 0 : StyleSheet.hairlineWidth,
+              borderBottomColor: liquid ? 'transparent' : colors.border,
+              // Glass under status bar — avoids a floating mint strip.
+              paddingTop: (liquid ? insets.top : 0) + 10,
+            },
+          ]}
+          backgroundColor={colors.surface}
+          tintColor={liquid ? liquidDetailHeaderTint(isDark) : undefined}
+          glassStyle="regular">
           <Pressable onPress={() => router.back()} style={styles.iconButton}>
-            <MaterialIcons name="arrow-back" size={24} color={colors.text} />
+            <MaterialIcons name="arrow-back" size={24} color={liquid && !isDark ? '#111827' : colors.text} />
           </Pressable>
           <Text
-            style={[styles.headerTitle, { color: colors.text, fontSize: fs(18), lineHeight: lh(18) }]}
+            style={[
+              styles.headerTitle,
+              { color: liquid && !isDark ? '#111827' : colors.text, fontSize: fs(18), lineHeight: lh(18) },
+            ]}
             numberOfLines={1}>
             {product.name}
           </Text>
           <View style={styles.headerSpacer} />
-        </View>
+        </LiquidSurface>
 
         <View style={styles.body}>
           <ScrollView
@@ -324,30 +361,15 @@ export default function ProductDetailScreen() {
                   contentContainerStyle={styles.similarRow}
                   keyboardShouldPersistTaps="handled">
                   {similar.map((item) => (
-                    <Pressable
+                    <ProductCard
                       key={item.id}
-                      onPress={() => openSimilarProduct(item)}
-                      style={[styles.similarCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <View style={[styles.similarImageWrap, { backgroundColor: colors.inputBg }]}>
-                        <Image
-                          source={{ uri: getProductImageUri(item) }}
-                          style={styles.image}
-                          contentFit="cover"
-                          transition={200}
-                        />
-                        {item.ribbon ? <ProductRibbonBadge ribbon={item.ribbon} /> : null}
-                      </View>
-                      <View style={styles.similarBody}>
-                        <Text
-                          style={[styles.similarName, { color: colors.text, fontSize: fs(13), lineHeight: lh(13) }]}
-                          numberOfLines={2}>
-                          {item.name}
-                        </Text>
-                        <Text style={[styles.similarPrice, { color: colors.primary, fontSize: fs(14) }]}>
-                          {formatPrice(item.list_price)}
-                        </Text>
-                      </View>
-                    </Pressable>
+                      product={item}
+                      width={150}
+                      onPressCard={() => openSimilarProduct(item)}
+                      onCartFeedback={(p) =>
+                        setSnackbar(t('products.addedToCart', { name: p.name }))
+                      }
+                    />
                   ))}
                 </ScrollView>
               )}
@@ -356,14 +378,25 @@ export default function ProductDetailScreen() {
           </ScrollView>
         </View>
 
-        <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+        <LiquidSurface
+          style={[
+            styles.bottomBar,
+            {
+              borderTopWidth: liquid ? 0 : StyleSheet.hairlineWidth,
+              borderTopColor: liquid ? 'transparent' : colors.border,
+              // Glass into the home-indicator area.
+              paddingBottom: (liquid ? Math.max(insets.bottom, 10) : 10) + 2,
+            },
+          ]}
+          backgroundColor={colors.surface}
+          glassStyle="regular">
           <QuantityStepper
             value={quantity}
             onChange={setQuantity}
             fontSize={rs(16)}
             iconSize={18}
-            borderColor={colors.border}
-            backgroundColor={colors.inputBg}
+            borderColor={liquid ? liquidGlassFill(isDark) : colors.border}
+            backgroundColor={liquid ? liquidGlassFill(isDark) : colors.inputBg}
             textColor={colors.text}
           />
 
@@ -376,7 +409,7 @@ export default function ProductDetailScreen() {
             labelStyle={{ fontSize: fs(15), lineHeight: lh(15), fontWeight: '700' }}>
             {labels.addToCart}
           </Button>
-        </View>
+        </LiquidSurface>
       </KeyboardAvoidingView>
 
       <AppToast message={snackbar} visible={!!snackbar} onDismiss={() => setSnackbar('')} />
@@ -405,7 +438,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingBottom: 10,
+    overflow: 'hidden',
   },
   iconButton: {
     width: 40,
@@ -471,34 +505,13 @@ const styles = StyleSheet.create({
     paddingRight: 4,
     paddingVertical: 4,
   },
-  similarCard: {
-    width: 150,
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  similarImageWrap: {
-    width: '100%',
-    aspectRatio: 1,
-  },
-  similarBody: {
-    padding: 10,
-  },
-  similarName: {
-    minHeight: 36,
-    fontWeight: '600',
-  },
-  similarPrice: {
-    marginTop: 6,
-    fontWeight: '700',
-  },
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: 10,
+    overflow: 'hidden',
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   addButton: {

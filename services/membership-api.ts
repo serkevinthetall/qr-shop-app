@@ -1,5 +1,7 @@
 import { apiRequest } from '@/services/api-client';
+import { throwIfUnauthorized } from '@/services/auth-error';
 import type { Membership, MembershipCoupon } from '@/types/membership';
+import { getApiFallbackMessage } from '@/services/network-error';
 
 type ApiErrorResponse = {
   success: false;
@@ -31,8 +33,9 @@ export async function fetchMembership(token: string) {
     { token },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, 'Failed to load membership.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('loadMembership')));
   }
 
   return {
@@ -47,8 +50,9 @@ export async function fetchMembershipCoupons(token: string) {
     { token },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, 'Failed to load coupons.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('loadCoupons')));
   }
 
   return data.coupons;

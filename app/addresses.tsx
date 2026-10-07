@@ -1,32 +1,39 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ActivityIndicator, Button, HelperText } from 'react-native-paper';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Button } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AddressDisplayText } from '@/components/address/address-display-text';
 import { AddressFormModal } from '@/components/address/address-form-modal';
+import { DetailHeaderBar } from '@/components/detail-header-bar';
+import { InlineErrorBanner } from '@/components/inline-error-banner';
+import { LiquidSurface } from '@/components/liquid-surface';
 import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
-import { useAppColors } from '@/contexts/theme-context';
+import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import { deleteAddress, fetchAddresses } from '@/services/address-api';
+import { getUserFacingError } from '@/services/auth-error';
 import type { Address } from '@/types/address';
 import { canEditAddress, getDeliveryAddresses, getMainAddress } from '@/types/address';
+import { isLiquidUiEnabled, liquidGlassBorder } from '@/utils/liquid-ui';
 
 export default function AddressesScreen() {
-  const router = useRouter();
   const colors = useAppColors();
+  const { isDark } = useThemeMode();
   const { rs, horizontalPadding, contentMaxWidth } = useResponsive();
   const { token } = useAuth();
   const { t, fs, lh } = useLanguage();
+  const liquid = isLiquidUiEnabled();
+  const cardBorder = liquid ? liquidGlassBorder(isDark) : colors.border;
 
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null);
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadAddresses = useCallback(async () => {
     if (!token) {
@@ -37,6 +44,23 @@ export default function AddressesScreen() {
     setAddresses(getDeliveryAddresses(list));
   }, [token]);
 
+  const handleReload = useCallback(async () => {
+    if (!token) {
+      return;
+    }
+    setIsRefreshing(true);
+    setError('');
+    try {
+      await loadAddresses();
+    } catch (err) {
+      const message = getUserFacingError(err, t('errors.loadAddresses'), t);
+      if (message) setError(message);
+    } finally {
+      setIsRefreshing(false);
+      setIsLoading(false);
+    }
+  }, [loadAddresses, token, t]);
+
   useEffect(() => {
     if (!token) {
       setIsLoading(false);
@@ -45,10 +69,11 @@ export default function AddressesScreen() {
 
     loadAddresses()
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load addresses.');
+        const message = getUserFacingError(err, t('errors.loadAddresses'), t);
+        if (message) setError(message);
       })
       .finally(() => setIsLoading(false));
-  }, [loadAddresses, token]);
+  }, [loadAddresses, token, t]);
 
   const mainAddress = getMainAddress(addresses);
 
@@ -67,7 +92,8 @@ export default function AddressesScreen() {
             await deleteAddress(token, address.id);
             await loadAddresses();
           } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to delete address.');
+            const message = getUserFacingError(err, t('errors.deleteAddress'), t);
+            if (message) setError(message);
           }
         },
       },
@@ -75,22 +101,10 @@ export default function AddressesScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      <View
-        style={[
-          styles.headerBar,
-          {
-            backgroundColor: colors.surface,
-            borderBottomColor: colors.border,
-            paddingHorizontal: horizontalPadding,
-          },
-        ]}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.text, fontSize: fs(rs(20)), lineHeight: lh(20) }]}>{t('addresses.title')}</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+    <SafeAreaView
+      style={[styles.screen, { backgroundColor: colors.background }]}
+      edges={liquid ? ['bottom'] : ['top', 'bottom']}>
+      <DetailHeaderBar title={t('addresses.title')} />
 
       <ScrollView
         contentContainerStyle={[
@@ -101,16 +115,30 @@ export default function AddressesScreen() {
           {t('addresses.subtitle')}
         </Text>
 
-        {error ? <HelperText type="error">{error}</HelperText> : null}
+        {error ? (
+          <InlineErrorBanner
+            message={error}
+            onRetry={() => {
+              void handleReload();
+            }}
+            onDismiss={() => setError('')}
+            retrying={isRefreshing}
+            style={{ marginHorizontal: 0 }}
+          />
+        ) : null}
 
         {isLoading ? (
           <ActivityIndicator color={colors.primary} style={styles.loader} />
         ) : (
           <>
             {addresses.map((address) => (
-              <View
+              <LiquidSurface
                 key={address.id}
-                style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                style={[styles.card, { borderColor: cardBorder }]}
+                backgroundColor={colors.card}
+                cornerRadius={16}
+                glassStyle="regular"
+                interactive>
                 <AddressDisplayText
                   address={address}
                   nameSize={rs(16)}
@@ -138,13 +166,17 @@ export default function AddressesScreen() {
                     <Text style={{ color: colors.textMuted, fontSize: fs(rs(12)), lineHeight: lh(12) }}>{t('addresses.mainAccountAddress')}</Text>
                   )}
                 </View>
-              </View>
+              </LiquidSurface>
             ))}
 
             {!addresses.length ? (
-              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <LiquidSurface
+                style={[styles.card, { borderColor: cardBorder }]}
+                backgroundColor={colors.card}
+                cornerRadius={16}
+                glassStyle="regular">
                 <Text style={{ color: colors.textMuted, lineHeight: lh(14) }}>{t('addresses.noSaved')}</Text>
-              </View>
+              </LiquidSurface>
             ) : null}
 
             <Button
@@ -185,26 +217,6 @@ export default function AddressesScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-  },
-  headerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 10,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontWeight: '700',
-  },
-  headerSpacer: {
-    width: 40,
   },
   content: {
     paddingTop: 16,

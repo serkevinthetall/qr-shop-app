@@ -4,8 +4,8 @@ import { HelperText, TextInput } from 'react-native-paper';
 
 import type { Township } from '@/constants/townships';
 import { formatTownshipLabel, searchTownships } from '@/constants/townships';
-import { textInputContentStyle } from '@/constants/text-input';
-import { useAppColors } from '@/contexts/theme-context';
+import { inputCaretProps, textInputContentStyle } from '@/constants/text-input';
+import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 
 type TownshipSearchProps = {
@@ -24,6 +24,7 @@ export function TownshipSearch({
   error,
 }: TownshipSearchProps) {
   const colors = useAppColors();
+  const { isDark } = useThemeMode();
   const { rs } = useResponsive();
   const [isFocused, setIsFocused] = useState(false);
 
@@ -47,6 +48,7 @@ export function TownshipSearch({
         }}
         style={styles.input}
         contentStyle={textInputContentStyle}
+        {...inputCaretProps(isDark)}
       />
 
       {error ? <HelperText type="error">{error}</HelperText> : null}

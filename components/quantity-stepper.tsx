@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Keyboard,
+  Platform,
   StyleSheet,
   TextInput,
   View,
@@ -8,6 +9,10 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { IconButton } from 'react-native-paper';
+
+import { inputCaretProps } from '@/constants/text-input';
+import { useThemeMode } from '@/contexts/theme-context';
+import { hapticLight } from '@/utils/haptics';
 
 type QuantityStepperProps = {
   value: number;
@@ -36,6 +41,7 @@ export function QuantityStepper({
   backgroundColor,
   textColor,
 }: QuantityStepperProps) {
+  const { isDark } = useThemeMode();
   const [draft, setDraft] = useState(String(value));
   const inputRef = useRef<TextInput>(null);
 
@@ -70,6 +76,7 @@ export function QuantityStepper({
   const handleDecrease = () => {
     inputRef.current?.blur();
     Keyboard.dismiss();
+    hapticLight();
 
     const current = resolveDraftValue();
     if (current <= min) {
@@ -83,6 +90,7 @@ export function QuantityStepper({
   const handleIncrease = () => {
     inputRef.current?.blur();
     Keyboard.dismiss();
+    hapticLight();
 
     const current = resolveDraftValue();
     const next = max != null ? Math.min(current + 1, max) : current + 1;
@@ -112,7 +120,8 @@ export function QuantityStepper({
         returnKeyType="done"
         selectTextOnFocus
         maxLength={6}
-        style={[styles.input, { color: textColor, fontSize }]}
+        style={[styles.input, { color: textColor, fontSize, lineHeight: Math.round(fontSize * 1.25) }]}
+        {...inputCaretProps(isDark)}
       />
       <IconButton
         icon="plus"
@@ -141,5 +150,8 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     textAlign: 'center',
     fontWeight: '700',
+    ...(Platform.OS === 'android'
+      ? { includeFontPadding: false, textAlignVertical: 'center' as const }
+      : null),
   },
 });

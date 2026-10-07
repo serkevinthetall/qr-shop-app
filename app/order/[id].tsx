@@ -1,14 +1,17 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DetailHeaderBar } from '@/components/detail-header-bar';
+import { InlineErrorBanner } from '@/components/inline-error-banner';
+import { LiquidSurface } from '@/components/liquid-surface';
 import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
-import { useAppColors } from '@/contexts/theme-context';
+import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useReorder } from '@/hooks/use-reorder';
+import { getUserFacingError } from '@/services/auth-error';
 import {
   fetchOrderById,
   getOrderDeliveryStatus,
@@ -17,10 +20,11 @@ import {
   type DeliveryBucketItem,
   type DeliveryStatus,
   type Order,
-  type OrderDelivery,
   type OrderLine,
 } from '@/services/order-api';
 import { formatPrice } from '@/types/product';
+import { formatMyanmarDateTime } from '@/utils/datetime';
+import { isLiquidUiEnabled, liquidGlassBorder, liquidGlassFill } from '@/utils/liquid-ui';
 
 type AppColors = ReturnType<typeof useAppColors>;
 
@@ -31,7 +35,6 @@ function getStatusBadgeColors(status: DeliveryStatus, colors: AppColors) {
       return { bg: colors.successBg, text: colors.success, border: colors.success };
     case 'cancelled':
       return { bg: colors.dangerBg, text: colors.danger, border: colors.danger };
-    case 'out_for_delivery':
     case 'partial':
     case 'preparing':
       return { bg: colors.primaryMuted, text: colors.primary, border: colors.primary };
@@ -41,61 +44,49 @@ function getStatusBadgeColors(status: DeliveryStatus, colors: AppColors) {
   }
 }
 
-function getPickingStateLabel(
-  delivery: OrderDelivery,
-  t: (key: string, vars?: Record<string, string | number>) => string,
-) {
-  switch (String(delivery.state)) {
-    case 'done':
-      return t('orderDetail.deliveryDone');
-    case 'cancel':
-      return t('orderDetail.deliveryCancelled');
-    case 'assigned':
-      return t('orderDetail.deliveryReady');
-    case 'confirmed':
-    case 'waiting':
-      return t('orderDetail.deliveryWaiting');
-    case 'draft':
-      return t('orderDetail.deliveryDraft');
-    default:
-      return delivery.state_label || delivery.state;
-  }
-}
-
 export default function OrderDetailScreen() {
   const router = useRouter();
   const colors = useAppColors();
+  const { isDark } = useThemeMode();
   const { token } = useAuth();
   const { t, fs, lh } = useLanguage();
   const { reorder, reorderingId } = useReorder();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const liquid = isLiquidUiEnabled();
+  const cardBorder = liquid ? liquidGlassBorder(isDark) : colors.border;
+  const safeEdges = liquid ? (['bottom'] as const) : (['top', 'bottom'] as const);
 
   const [order, setOrder] = useState<Order | null>(null);
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [deliveringNow, setDeliveringNow] = useState<DeliveryBucketItem[]>([]);
   const [comingLater, setComingLater] = useState<DeliveryBucketItem[]>([]);
-  const [deliveries, setDeliveries] = useState<OrderDelivery[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  const loadOrder = useCallback(async () => {
     if (!token || !id) {
       return;
     }
 
-    fetchOrderById(token, Number(id))
-      .then((data) => {
-        setOrder(data.order);
-        setLines(data.lines);
-        setDeliveringNow(data.delivering_now);
-        setComingLater(data.coming_later);
-        setDeliveries(data.deliveries);
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load order.');
-      })
-      .finally(() => setIsLoading(false));
-  }, [id, token]);
+    setIsLoading(true);
+    setError('');
+    try {
+      const data = await fetchOrderById(token, Number(id));
+      setOrder(data.order);
+      setLines(data.lines);
+      setDeliveringNow(data.delivering_now);
+      setComingLater(data.coming_later);
+    } catch (err) {
+      const message = getUserFacingError(err, t('errors.loadOrder'), t);
+      if (message) setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id, token, t]);
+
+  useEffect(() => {
+    void loadOrder();
+  }, [loadOrder]);
 
   if (isLoading) {
     return (
@@ -107,10 +98,23 @@ export default function OrderDetailScreen() {
 
   if (!order) {
     return (
-      <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
-        <OrderDetailHeader title={t('orderDetail.title')} colors={colors} fs={fs} lh={lh} onBack={() => router.back()} />
+      <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={safeEdges}>
+        <DetailHeaderBar title={t('orderDetail.title')} />
         <View style={styles.content}>
-          <Text style={[styles.errorText, { color: colors.danger, lineHeight: lh(14) }]}>{error || t('orderDetail.notFound')}</Text>
+          {error ? (
+            <InlineErrorBanner
+              message={error}
+              onRetry={() => {
+                void loadOrder();
+              }}
+              onDismiss={() => setError('')}
+              style={{ marginHorizontal: 0 }}
+            />
+          ) : (
+            <Text style={[styles.errorText, { color: colors.danger, lineHeight: lh(14) }]}>
+              {t('orderDetail.notFound')}
+            </Text>
+          )}
           <Button onPress={() => router.back()}>{t('orderDetail.goBack')}</Button>
         </View>
       </SafeAreaView>
@@ -125,25 +129,27 @@ export default function OrderDetailScreen() {
   const shippingLabel = getOrderShippingLabel(order);
   const statusBadge = getStatusBadgeColors(deliveryStatus, colors);
   const showDeliverySplit =
-    deliveryStatus === 'partial' ||
-    deliveryStatus === 'preparing' ||
-    deliveryStatus === 'out_for_delivery' ||
-    deliveryStatus === 'delivered';
-  const deliveryDocs = deliveries.length > 0 ? deliveries : order.deliveries || [];
-  const deliveryTitle =
-    deliveryDocs.length === 1
-      ? t('orderDetail.deliveryCount', { count: 1 })
-      : deliveryDocs.length > 1
-        ? t('orderDetail.deliveryCountPlural', { count: deliveryDocs.length })
-        : t('orderDetail.deliveries');
+    deliveryStatus === 'partial' || deliveryStatus === 'preparing' || deliveryStatus === 'delivered';
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      <OrderDetailHeader title={t('orderDetail.title')} colors={colors} fs={fs} lh={lh} onBack={() => router.back()} />
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={safeEdges}>
+      <DetailHeaderBar title={t('orderDetail.title')} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.orderNumberSection, { backgroundColor: colors.primaryMuted, borderColor: colors.primary }]}>
+        <LiquidSurface
+          style={[styles.summaryCard, { borderColor: cardBorder }]}
+          backgroundColor={colors.card}
+          cornerRadius={16}
+          glassStyle="regular"
+          interactive>
+          <View
+            style={[
+              styles.orderNumberSection,
+              {
+                backgroundColor: liquid ? liquidGlassFill(isDark) : colors.primaryMuted,
+                borderColor: liquid ? cardBorder : colors.primary,
+              },
+            ]}>
             <Text style={[styles.orderNumberLabel, { color: colors.textMuted, fontSize: fs(12), lineHeight: lh(12) }]}>
               {t('orderDetail.orderNumber')}
             </Text>
@@ -176,7 +182,7 @@ export default function OrderDetailScreen() {
           <View style={styles.summaryBody}>
             <DetailRow
               label={t('orderDetail.date')}
-              value={new Date(order.date_order).toLocaleString()}
+              value={formatMyanmarDateTime(order.date_order)}
               colors={colors}
               fs={fs}
               lh={lh}
@@ -240,84 +246,7 @@ export default function OrderDetailScreen() {
               />
             ) : null}
           </View>
-        </View>
-
-        {(deliveryStatus !== 'pending' && deliveryStatus !== 'cancelled') || deliveryDocs.length > 0 ? (
-          <View style={[styles.deliveryDocsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.deliveryDocsHeader}>
-              <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16), marginBottom: 0 }]}>
-                {deliveryTitle}
-              </Text>
-              {deliveryDocs.length > 0 ? (
-                <View style={[styles.deliveryCountPill, { backgroundColor: colors.primaryMuted, borderColor: colors.primary }]}>
-                  <Text style={{ color: colors.primary, fontSize: fs(12), lineHeight: lh(12), fontWeight: '700' }}>
-                    {deliveryDocs.length}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-
-            {deliveryDocs.length === 0 ? (
-              <Text style={[styles.deliveryHint, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
-                {t('orderDetail.noDeliveriesYet')}
-              </Text>
-            ) : (
-              deliveryDocs.map((delivery) => (
-                <View
-                  key={delivery.id}
-                  style={[styles.deliveryDocRow, { borderTopColor: colors.border }]}>
-                  <View style={styles.deliveryDocMain}>
-                    <Text
-                      style={[styles.deliveryDocName, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}
-                      numberOfLines={1}>
-                      {delivery.name}
-                    </Text>
-                    {delivery.scheduled_date || delivery.date_done ? (
-                      <Text style={{ color: colors.textMuted, fontSize: fs(12), lineHeight: lh(12) }}>
-                        {delivery.date_done
-                          ? new Date(String(delivery.date_done).replace(' ', 'T')).toLocaleString()
-                          : new Date(String(delivery.scheduled_date).replace(' ', 'T')).toLocaleString()}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <View
-                    style={[
-                      styles.pickingBadge,
-                      {
-                        backgroundColor:
-                          delivery.state === 'done'
-                            ? colors.successBg
-                            : delivery.state === 'cancel'
-                              ? colors.dangerBg
-                              : colors.primaryMuted,
-                        borderColor:
-                          delivery.state === 'done'
-                            ? colors.success
-                            : delivery.state === 'cancel'
-                              ? colors.danger
-                              : colors.primary,
-                      },
-                    ]}>
-                    <Text
-                      style={{
-                        color:
-                          delivery.state === 'done'
-                            ? colors.success
-                            : delivery.state === 'cancel'
-                              ? colors.danger
-                              : colors.primary,
-                        fontSize: fs(11),
-                        lineHeight: lh(11),
-                        fontWeight: '700',
-                      }}>
-                      {getPickingStateLabel(delivery, t)}
-                    </Text>
-                  </View>
-                </View>
-              ))
-            )}
-          </View>
-        ) : null}
+        </LiquidSurface>
 
         {showDeliverySplit ? (
           <>
@@ -332,6 +261,9 @@ export default function OrderDetailScreen() {
                 colors={colors}
                 fs={fs}
                 lh={lh}
+                cardBorder={cardBorder}
+                liquid={liquid}
+                isDark={isDark}
               />
             ) : null}
 
@@ -346,17 +278,27 @@ export default function OrderDetailScreen() {
                   deliveryStatus === 'preparing' ? t('orderDetail.preparingHint') : t('orderDetail.backorderHint')
                 }
                 muted
+                cardBorder={cardBorder}
+                liquid={liquid}
+                isDark={isDark}
               />
             ) : null}
           </>
         ) : null}
 
-        <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(18), lineHeight: lh(18) }]}>{t('orderDetail.items')}</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(18), lineHeight: lh(18) }]}>
+          {t('orderDetail.items')}
+        </Text>
 
         {lines.map((line) => (
-          <View
+          <LiquidSurface
             key={line.id}
-            style={[styles.lineCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            remountKey={line.id}
+            style={[styles.lineCard, { borderColor: cardBorder }]}
+            backgroundColor={colors.card}
+            cornerRadius={12}
+            glassStyle="regular"
+            interactive>
             <View style={styles.lineTopRow}>
               <Text
                 style={[styles.lineName, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}
@@ -377,11 +319,13 @@ export default function OrderDetailScreen() {
             </View>
             <Text style={[styles.lineMeta, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
               {t('orderDetail.qty')}: {line.product_uom_qty} × {formatPrice(line.price_unit)}
-              {typeof line.qty_delivered === 'number' && typeof line.qty_pending === 'number' && line.qty_pending > 0
+              {typeof line.qty_delivered === 'number' &&
+              typeof line.qty_pending === 'number' &&
+              line.qty_pending > 0
                 ? ` · ${line.qty_delivered}/${line.product_uom_qty}`
                 : ''}
             </Text>
-          </View>
+          </LiquidSurface>
         ))}
 
         <Button
@@ -412,6 +356,9 @@ function DeliverySection({
   lh,
   hint,
   muted = false,
+  cardBorder,
+  liquid,
+  isDark,
 }: {
   title: string;
   items: DeliveryBucketItem[];
@@ -420,17 +367,28 @@ function DeliverySection({
   lh: (size: number) => number | undefined;
   hint?: string;
   muted?: boolean;
+  cardBorder: string;
+  liquid: boolean;
+  isDark: boolean;
 }) {
+  const fill = muted
+    ? liquid
+      ? liquidGlassFill(isDark)
+      : colors.inputBg
+    : colors.card;
+
   return (
-    <View
-      style={[
-        styles.deliverySection,
-        {
-          backgroundColor: muted ? colors.inputBg : colors.card,
-          borderColor: colors.border,
-        },
-      ]}>
-      <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16), marginBottom: 10 }]}>
+    <LiquidSurface
+      style={[styles.deliverySection, { borderColor: cardBorder }]}
+      backgroundColor={fill}
+      cornerRadius={14}
+      glassStyle="regular"
+      interactive={!muted}>
+      <Text
+        style={[
+          styles.sectionTitle,
+          { color: colors.text, fontSize: fs(16), lineHeight: lh(16), marginBottom: 10 },
+        ]}>
         {title}
       </Text>
       {items.map((item) => (
@@ -446,35 +404,11 @@ function DeliverySection({
         </View>
       ))}
       {hint ? (
-        <Text style={[styles.deliveryHint, { color: colors.textMuted, fontSize: fs(12), lineHeight: lh(12) }]}>{hint}</Text>
+        <Text style={[styles.deliveryHint, { color: colors.textMuted, fontSize: fs(12), lineHeight: lh(12) }]}>
+          {hint}
+        </Text>
       ) : null}
-    </View>
-  );
-}
-
-function OrderDetailHeader({
-  title,
-  colors,
-  fs,
-  lh,
-  onBack,
-}: {
-  title: string;
-  colors: AppColors;
-  fs: (size: number) => number;
-  lh: (size: number) => number | undefined;
-  onBack: () => void;
-}) {
-  return (
-    <View style={[styles.headerBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-      <Pressable onPress={onBack} style={styles.headerBackButton} accessibilityRole="button" accessibilityLabel="Go back">
-        <MaterialIcons name="arrow-back" size={24} color={colors.text} />
-      </Pressable>
-      <Text style={[styles.headerTitle, { color: colors.text, fontSize: fs(20), lineHeight: lh(20) }]} numberOfLines={1}>
-        {title}
-      </Text>
-      <View style={styles.headerSpacer} />
-    </View>
+    </LiquidSurface>
   );
 }
 
@@ -495,11 +429,17 @@ function DetailRow({
 }) {
   return (
     <View style={styles.detailRow}>
-      <Text style={[styles.detailLabel, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>{label}</Text>
+      <Text style={[styles.detailLabel, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
+        {label}
+      </Text>
       <Text
         style={[
           strong ? styles.detailValueStrong : styles.detailValue,
-          { color: strong ? colors.primary : colors.text, fontSize: fs(strong ? 18 : 16), lineHeight: lh(strong ? 18 : 16) },
+          {
+            color: strong ? colors.primary : colors.text,
+            fontSize: fs(strong ? 18 : 16),
+            lineHeight: lh(strong ? 18 : 16),
+          },
         ]}>
         {value}
       </Text>
@@ -516,27 +456,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  headerBackButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontWeight: '700',
-  },
-  headerSpacer: {
-    width: 40,
-  },
   content: {
     padding: 20,
     paddingBottom: 32,
@@ -550,7 +469,7 @@ const styles = StyleSheet.create({
   orderNumberSection: {
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   orderNumberLabel: {
     fontWeight: '600',
@@ -602,51 +521,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontWeight: '700',
     marginBottom: 12,
-  },
-  deliveryDocsCard: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 14,
-  },
-  deliveryDocsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 10,
-  },
-  deliveryCountPill: {
-    minWidth: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  deliveryDocRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  deliveryDocMain: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
-  },
-  deliveryDocName: {
-    fontWeight: '700',
-  },
-  pickingBadge: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    flexShrink: 0,
   },
   deliverySection: {
     borderWidth: 1,

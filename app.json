@@ -2,24 +2,26 @@
   "expo": {
     "name": "QR Shop",
     "slug": "qr-shop-app",
-    "version": "1.4.1",
+    "version": "1.4.3",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "qrapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.qrshop.myanmar",
       "googleServicesFile": "./GoogleService-Info.plist",
+      "appStoreUrl": "https://apps.apple.com/app/id6800218923",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": ["viber", "fb", "tel", "itms-apps"]
       },
-      "buildNumber": "19"
+      "buildNumber": "24"
     },
     "android": {
       "package": "com.qrshop.myanmar",
-      "versionCode": 23,
+      "versionCode": 26,
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.qrshop.myanmar",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
@@ -28,6 +30,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECEIVE_BOOT_COMPLETED",
@@ -41,6 +44,13 @@
     "plugins": [
       "expo-router",
       [
+        "expo-navigation-bar",
+        {
+          "enforceContrast": false,
+          "hidden": false
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "ios": {
@@ -50,7 +60,10 @@
           "android": {
             "enableProguardInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
-            "extraProguardRules": "-keep class io.invertase.firebase.** { *; }\n-keep class com.google.firebase.** { *; }\n-keep class com.google.android.gms.** { *; }\n-dontwarn com.google.firebase.**\n-dontwarn com.google.android.gms.**\n-keep class com.qrshop.myanmar.network.** { *; }\n-keepclassmembers class com.qrshop.myanmar.network.** { *; }"
+            "extraProguardRules": "-keep class io.invertase.firebase.** { *; }\n-keep class com.google.firebase.** { *; }\n-keep class com.google.android.gms.** { *; }\n-dontwarn com.google.firebase.**\n-dontwarn com.google.android.gms.**\n-keep class com.qrshop.myanmar.network.** { *; }\n-keepclassmembers class com.qrshop.myanmar.network.** { *; }",
+            "manifestQueries": {
+              "package": ["com.viber.voip", "com.facebook.katana", "com.facebook.lite"]
+            }
           }
         }
       ],
@@ -85,7 +98,11 @@
       "./plugins/with-rnfb-ios-fix.js",
       "./plugins/with-android-play-compliance.js",
       "./plugins/with-okhttp-doh.js",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-font",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

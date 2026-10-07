@@ -1,5 +1,7 @@
 import { apiRequest } from '@/services/api-client';
+import { throwIfUnauthorized } from '@/services/auth-error';
 import { JUST_FOR_YOU, type Category, type CategorySelection, type Product } from '@/types/product';
+import { getApiFallbackMessage } from '@/services/network-error';
 
 type ApiErrorResponse = {
   success: false;
@@ -53,8 +55,9 @@ export async function fetchProducts(
     { token: token || undefined },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, 'Failed to load products.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('loadProducts')));
   }
 
   return data.products;
@@ -72,8 +75,9 @@ export async function fetchProductById(
     { token: token || undefined },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, 'Failed to load product.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('loadProduct')));
   }
 
   return {
@@ -88,7 +92,7 @@ export async function fetchCategories() {
   );
 
   if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, 'Failed to load categories.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('loadCategories')));
   }
 
   return data.categories;
@@ -104,8 +108,9 @@ export async function searchProducts(
     { token: token || undefined },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, 'Search failed.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('searchProducts')));
   }
 
   return data.products;
@@ -138,8 +143,9 @@ export async function fetchProductPrices(token?: string | null, version?: string
     token: token || undefined,
   });
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, 'Failed to load product prices.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('loadProducts')));
   }
 
   return {

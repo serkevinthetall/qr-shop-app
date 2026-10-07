@@ -2,6 +2,7 @@ import { Image, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 're
 
 import { useLanguage } from '@/contexts/language-context';
 import { useAppColors } from '@/contexts/theme-context';
+import { withHapticPress } from '@/utils/haptics';
 
 const LANG_EN_TO_MY_LIGHT = require('@/assets/images/lang-en-to-my-light.png');
 const LANG_EN_TO_MY_DARK = require('@/assets/images/lang-en-to-my-dark.png');
@@ -17,7 +18,9 @@ export function LanguageToggleChip({ onPress, style }: LanguageToggleChipProps) 
   const colors = useAppColors();
   const { t, language, setLanguage } = useLanguage();
 
-  const handlePress = onPress ?? (() => setLanguage(language === 'my' ? 'en' : 'my'));
+  const handlePress = withHapticPress(
+    onPress ?? (() => setLanguage(language === 'my' ? 'en' : 'my')),
+  );
   const iconSource =
     language === 'my'
       ? colors.isDark
@@ -46,15 +49,15 @@ export function LanguageToggleChip({ onPress, style }: LanguageToggleChipProps) 
 
 const styles = StyleSheet.create({
   button: {
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
   },
   icon: {
-    width: 34,
-    height: 34,
+    width: 36,
+    height: 36,
   },
 });

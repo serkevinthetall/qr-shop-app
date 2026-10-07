@@ -6,14 +6,15 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  View,
 } from 'react-native';
 import { Button, Checkbox, HelperText, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 import { LanguageToggleChip } from '@/components/language-toggle-chip';
+import { LiquidSurface } from '@/components/liquid-surface';
 import {
+  inputCaretProps,
   latinTextInputContentStyle,
   paperButtonContentStyle,
   paperButtonLabelStyle,
@@ -24,6 +25,7 @@ import { useLanguage } from '@/contexts/language-context';
 import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useKeyboardBottomPadding } from '@/hooks/use-keyboard-bottom-padding';
 import { useResponsive } from '@/hooks/use-responsive';
+import { isLikelyNetworkErrorMessage } from '@/services/auth-error';
 import { LoginApiError } from '@/services/auth-api';
 import { prefetchSessionBootstrap } from '@/services/catalog-bootstrap';
 import {
@@ -31,6 +33,9 @@ import {
   loadSavedLoginCredentials,
   saveLoginCredentials,
 } from '@/services/saved-login';
+import { consumeSessionExpiredLoginHint } from '@/services/session-expired';
+import { withHapticPress } from '@/utils/haptics';
+import { isLiquidUiEnabled, liquidGlassBorder, liquidGlassFill } from '@/utils/liquid-ui';
 
 const LOGO_LIGHT = require('@/assets/images/icon.png');
 const LOGO_DARK = require('@/assets/images/logo-dark.png');
@@ -62,10 +67,19 @@ export default function LoginScreen() {
   const inputContainerStyle =
     language === 'my' ? paperTextInputContainerStyle(language) : undefined;
   const isLocked = lockSecondsLeft > 0;
+  const liquid = isLiquidUiEnabled();
 
   useEffect(() => {
     savePasswordRef.current = savePassword;
   }, [savePassword]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (consumeSessionExpiredLoginHint()) {
+        setError(t('login.sessionExpired'));
+      }
+    }, [t]),
+  );
 
   useEffect(() => {
     if (lockUntilMs <= 0) {
@@ -202,6 +216,8 @@ export default function LoginScreen() {
         } else {
           setError(t('login.invalidCredentials'));
         }
+      } else if (err instanceof Error && isLikelyNetworkErrorMessage(err.message)) {
+        setError(err.message);
       } else {
         setError(t('login.failed'));
       }
@@ -227,17 +243,25 @@ export default function LoginScreen() {
             paddingTop: keyboardOpen ? rs(20) : 32,
           },
         ]}>
-        <View
+        <LiquidSurface
           style={[
             styles.card,
             {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
+              borderColor: liquid ? liquidGlassBorder(isDark) : colors.border,
               maxWidth: contentMaxWidth,
             },
-          ]}>
+          ]}
+          backgroundColor={colors.card}
+          glassStyle="regular"
+          interactive>
           <LanguageToggleChip
-            style={[styles.languageChip, { backgroundColor: colors.card, borderWidth: 0 }]}
+            style={[
+              styles.languageChip,
+              {
+                backgroundColor: liquid ? liquidGlassFill(isDark) : colors.card,
+                borderWidth: 0,
+              },
+            ]}
           />
 
           <Image
@@ -264,6 +288,7 @@ export default function LoginScreen() {
             contentStyle={latinTextInputContentStyle}
             onFocus={() => setFocusedField('login')}
             onBlur={() => setFocusedField((current) => (current === 'login' ? null : current))}
+            {...inputCaretProps(isDark)}
           />
 
           <TextInput
@@ -290,6 +315,7 @@ export default function LoginScreen() {
             }
             onFocus={() => setFocusedField('password')}
             onBlur={() => setFocusedField((current) => (current === 'password' ? null : current))}
+            {...inputCaretProps(isDark)}
           />
 
           <Pressable
@@ -317,7 +343,7 @@ export default function LoginScreen() {
 
           <Button
             mode="contained"
-            onPress={handleLogin}
+            onPress={withHapticPress(handleLogin, 'medium')}
             loading={isSubmitting || isPreparingSession}
             disabled={isSubmitting || isPreparingSession || isLocked}
             style={styles.button}
@@ -325,7 +351,7 @@ export default function LoginScreen() {
             labelStyle={paperButtonLabelStyle(language, fs, lh, 15)}>
             {isPreparingSession ? t('login.loadingShop') : t('login.signIn')}
           </Button>
-        </View>
+        </LiquidSurface>
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );

@@ -1,4 +1,5 @@
 import 'react-native-url-polyfill/auto';
+import '@/utils/ignore-dev-warnings';
 import '../global.css';
 
 import {
@@ -8,9 +9,9 @@ import {
   NotoSansMyanmar_700Bold,
   useFonts,
 } from '@expo-google-fonts/noto-sans-myanmar';
-import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavigationThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { Analytics } from '@vercel/analytics/react';
@@ -23,6 +24,7 @@ import 'react-native-reanimated';
 import { getAppColors } from '@/constants/app-colors';
 import { MYANMAR_FONTS } from '@/constants/fonts';
 import { hydratePreferredApiBase } from '@/constants/api';
+import { AndroidSystemNavScrim } from '@/components/android-system-nav-scrim';
 import { NotificationBootstrap } from '@/components/notification-bootstrap';
 import { OfflineNotice } from '@/components/offline-notice';
 import { ForceUpdateModal } from '@/components/force-update-modal';
@@ -107,9 +109,20 @@ function RootNavigator() {
   const paperTheme = language === 'my' ? withBurmeseFonts(baseTheme) : baseTheme;
 
   useEffect(() => {
-    // Prefer SystemUI over deprecated Window.setStatusBarColor / setNavigationBarColor.
-    void SystemUI.setBackgroundColorAsync(colors.background);
-  }, [colors.background]);
+    // Android: use tabBar color as the window root so the transparent system
+    // nav (Expo Go edge-to-edge) does not sit on the same gray as the screen.
+    // iOS: keep the normal screen background.
+    const root =
+      Platform.OS === 'android' ? colors.tabBar : colors.background;
+    void SystemUI.setBackgroundColorAsync(root);
+  }, [colors.background, colors.tabBar]);
+
+  // Android system nav button contrast:
+  // - dark mode → light buttons (style "dark" = dark bar / light glyphs)
+  // - light mode → dark buttons (style "light" = light bar / dark glyphs)
+  // Requires native enforceContrast=false (app.json) so Android does not paint
+  // the pink/lavender contrast scrim over the bottom inset.
+  const androidNavStyle = isDark ? 'dark' : 'light';
 
   return (
     <PaperProvider theme={paperTheme}>
@@ -132,6 +145,10 @@ function RootNavigator() {
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         </Stack>
         <StatusBar style={isDark ? 'light' : 'dark'} />
+        {Platform.OS === 'android' ? (
+          <NavigationBar style={androidNavStyle} hidden={false} />
+        ) : null}
+        <AndroidSystemNavScrim />
         {/* Vercel Analytics only tracks the web app, not native Android/iOS. */}
         {Platform.OS === 'web' ? <Analytics /> : null}
       </NavigationThemeProvider>

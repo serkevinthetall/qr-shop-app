@@ -9,13 +9,16 @@ import {
   emptyAddressForm,
   type AddressFormValues,
 } from '@/components/address/address-form-fields';
+import { LiquidSurface } from '@/components/liquid-surface';
 import { useLanguage } from '@/contexts/language-context';
 import { useAppColors } from '@/contexts/theme-context';
 import { useKeyboardBottomPadding } from '@/hooks/use-keyboard-bottom-padding';
 import { useResponsive } from '@/hooks/use-responsive';
 import { createAddress, fetchAddressMeta, updateAddress, AddressApiError } from '@/services/address-api';
+import { getUserFacingError, isUnauthorizedError } from '@/services/auth-error';
 import type { Address, AddressMeta } from '@/types/address';
 import { buildAddressPayload, DEFAULT_ADDRESS_META } from '@/utils/address';
+import { isLiquidUiEnabled } from '@/utils/liquid-ui';
 
 type AddressFormModalProps = {
   visible: boolean;
@@ -37,6 +40,7 @@ export function AddressFormModal({
   const colors = useAppColors();
   const { rs } = useResponsive();
   const { t, fs, lh } = useLanguage();
+  const liquid = isLiquidUiEnabled();
 
   const [form, setForm] = useState<AddressFormValues>(emptyAddressForm);
   const [townshipError, setTownshipError] = useState('');
@@ -127,8 +131,12 @@ export function AddressFormModal({
         const message = t('addressForm.phoneUsedError');
         setPhoneError(message);
         setFormError(message);
+      } else if (isUnauthorizedError(err)) {
+        // Session expired — api-client already signs the user out.
+        handleDismiss();
       } else {
-        setFormError(err instanceof Error ? err.message : t('addressForm.saveError'));
+        const message = getUserFacingError(err, t('addressForm.saveError'));
+        if (message) setFormError(message);
       }
     } finally {
       setIsSaving(false);
@@ -147,13 +155,22 @@ export function AddressFormModal({
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}>
-          <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <LiquidSurface
+            style={[
+              styles.header,
+              {
+                borderBottomColor: liquid ? 'transparent' : colors.border,
+                borderBottomWidth: liquid ? 0 : StyleSheet.hairlineWidth,
+              },
+            ]}
+            backgroundColor={colors.surface}
+            glassStyle="regular">
             <IconButton icon="arrow-left" onPress={handleDismiss} accessibilityLabel={t('common.back')} />
             <Text style={[styles.title, { color: colors.text, fontSize: fs(rs(18)), lineHeight: lh(18) }]}>
               {mode === 'edit' ? t('addressForm.editTitle') : t('addressForm.addTitle')}
             </Text>
             <View style={styles.headerSpacer} />
-          </View>
+          </LiquidSurface>
 
           <ScrollView
             keyboardShouldPersistTaps="handled"
@@ -177,14 +194,23 @@ export function AddressFormModal({
             />
           </ScrollView>
 
-          <View style={[styles.actions, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
+          <LiquidSurface
+            style={[
+              styles.actions,
+              {
+                borderTopColor: liquid ? 'transparent' : colors.border,
+                borderTopWidth: liquid ? 0 : StyleSheet.hairlineWidth,
+              },
+            ]}
+            backgroundColor={colors.surface}
+            glassStyle="regular">
             <Button mode="outlined" onPress={handleDismiss} disabled={isSaving} style={styles.actionButton}>
               {t('addressForm.cancel')}
             </Button>
             <Button mode="contained" onPress={handleSave} loading={isSaving} disabled={isSaving} style={styles.actionButton}>
               {mode === 'edit' ? t('addressForm.updateBranch') : t('addressForm.saveBranch')}
             </Button>
-          </View>
+          </LiquidSurface>
         </KeyboardAvoidingView>
         </SafeAreaView>
       </SafeAreaProvider>

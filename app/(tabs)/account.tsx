@@ -2,23 +2,47 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, AppState, Easing, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Animated,
+  AppState,
+  Easing,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Button, SegmentedButtons, Switch } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { TabAppToast } from '@/components/app-toast';
+import { FacebookLogo, ViberLogo } from '@/components/brand-logos';
 import { CelebrationBurst } from '@/components/celebration-burst';
+import { InlineErrorBanner } from '@/components/inline-error-banner';
 import { LanguageDropdown } from '@/components/language-dropdown';
+import { LiquidSurface } from '@/components/liquid-surface';
 import {
   MembershipUpgradeModal,
   type UpgradeContactInfo,
   type UpgradePlan,
 } from '@/components/membership-upgrade-modal';
+import {
+  SUPPORT_CONFIG,
+  openExternalUrl,
+  openFacebookPage,
+  openViberChat,
+} from '@/constants/support';
 import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
+import { useLiquidTabBarScrollProps } from '@/contexts/liquid-tab-bar-visibility';
 import { useNotifications } from '@/contexts/notification-context';
 import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import { takeAccountBootstrap } from '@/services/catalog-bootstrap';
+import { getUserFacingError } from '@/services/auth-error';
 import { fetchCustomerProfile } from '@/services/customer-api';
 import { fetchMembership, fetchMembershipCoupons } from '@/services/membership-api';
 import {
@@ -27,6 +51,7 @@ import {
   setMembershipUpgradePending,
   submitMembershipUpgradeRequest,
 } from '@/services/membership-upgrade';
+import { openStoreReviewPage } from '@/services/store-review';
 import type { Membership, MembershipCoupon } from '@/types/membership';
 import {
   getCouponEligibilityMessage,
@@ -37,8 +62,23 @@ import {
   isProOrPremiumMember,
 } from '@/types/membership';
 import { formatPrice } from '@/types/product';
+import { hapticLight, hapticSuccess, withHapticPress } from '@/utils/haptics';
+import {
+  isLiquidUiEnabled,
+  liquidGlassBorder,
+  liquidGlassFill,
+  liquidGlassTint,
+} from '@/utils/liquid-ui';
 
 const ACCOUNT_SYNC_INTERVAL_MS = 20000;
+
+function formatSupportPhone(display: string) {
+  const digits = display.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('09')) {
+    return `${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8)}`;
+  }
+  return display;
+}
 
 function readAccountSeed() {
   const seed = takeAccountBootstrap();
@@ -116,11 +156,15 @@ function resolveContactInfo(
 export default function AccountScreen() {
   const router = useRouter();
   const colors = useAppColors();
-  const { theme, preference, followSystem, setFollowSystem, setPreference } = useThemeMode();
+  const { theme, preference, followSystem, setFollowSystem, setPreference, isDark } = useThemeMode();
   const { rs, horizontalPadding, contentMaxWidth } = useResponsive();
   const { user, token, signOut } = useAuth();
   const { t, fs, lh } = useLanguage();
   const { unreadCount } = useNotifications();
+  const tabBarScrollProps = useLiquidTabBarScrollProps();
+  const liquid = isLiquidUiEnabled();
+  const cardBorder = liquid ? liquidGlassBorder(isDark) : colors.border;
+  const nestedFill = liquid ? liquidGlassFill(isDark) : colors.inputBg;
 
   const [accountSeed] = useState(readAccountSeed);
   const [membership, setMembership] = useState<Membership | null>(accountSeed.membership);
@@ -130,6 +174,8 @@ export default function AccountScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [phoneActionsVisible, setPhoneActionsVisible] = useState(false);
+  const [phoneToast, setPhoneToast] = useState('');
   const [showMembership, setShowMembership] = useState(false);
   const [upgradePending, setUpgradePending] = useState(false);
   const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
@@ -171,7 +217,8 @@ export default function AccountScreen() {
   useEffect(() => {
     loadAccountData()
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load account data.');
+        const message = getUserFacingError(err, t('errors.loadAccount'), t);
+        if (message) setError(message);
       })
       .finally(() => setIsLoading(false));
   }, [loadAccountData]);
@@ -206,11 +253,12 @@ export default function AccountScreen() {
     try {
       await loadAccountData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to refresh account data.');
+      const message = getUserFacingError(err, t('errors.refreshAccount'), t);
+      if (message) setError(message);
     } finally {
       setIsRefreshing(false);
     }
-  }, [loadAccountData]);
+  }, [loadAccountData, t]);
 
   const couponAvailable = coupon ? isCouponAvailable(coupon, membership) : false;
 
@@ -250,7 +298,7 @@ export default function AccountScreen() {
 
   const handleSelectPlan = async (plan: UpgradePlan) => {
     if (!token) {
-      setError('Please sign in again.');
+      setError(t('errors.signInAgain'));
       return;
     }
 
@@ -268,11 +316,42 @@ export default function AccountScreen() {
       setUpgradeModalVisible(false);
       setShowCelebration(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit upgrade request.');
+      const message = getUserFacingError(err, t('errors.upgradeFailed'), t);
+      if (message) setError(message);
     } finally {
       setIsSubmittingUpgrade(false);
     }
   };
+
+  const openSupportChannel = useCallback(
+    async (kind: 'call' | 'viber' | 'facebook') => {
+      hapticLight();
+      let opened = false;
+      if (kind === 'call') {
+        opened = await openExternalUrl(SUPPORT_CONFIG.phoneTel);
+      } else if (kind === 'viber') {
+        opened = await openViberChat();
+      } else {
+        opened = await openFacebookPage();
+      }
+      if (!opened) {
+        setError(t('account.helpOpenFailed'));
+      }
+    },
+    [t],
+  );
+
+  const handleCopyPhone = useCallback(async () => {
+    await Clipboard.setStringAsync(SUPPORT_CONFIG.phoneDisplay);
+    hapticSuccess();
+    setPhoneActionsVisible(false);
+    setPhoneToast(t('account.copied'));
+  }, [t]);
+
+  const handleCallPhone = useCallback(() => {
+    setPhoneActionsVisible(false);
+    void openSupportChannel('call');
+  }, [openSupportChannel]);
 
   if (isLoading) {
     return (
@@ -289,12 +368,27 @@ export default function AccountScreen() {
           styles.content,
           { paddingHorizontal: horizontalPadding, maxWidth: contentMaxWidth, alignSelf: 'center', width: '100%' },
         ]}
+        {...tabBarScrollProps}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
         }>
-        {error ? <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text> : null}
+        {error ? (
+          <InlineErrorBanner
+            message={error}
+            onRetry={() => {
+              void handleRefresh();
+            }}
+            onDismiss={() => setError('')}
+            retrying={isRefreshing}
+            style={styles.errorBanner}
+          />
+        ) : null}
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <LiquidSurface
+          style={[styles.card, { borderColor: cardBorder }]}
+          backgroundColor={colors.card}
+          glassStyle="regular"
+          interactive>
           <InfoRow label={t('account.myName')} value={user?.name ?? '-'} colors={colors} rs={rs} fs={fs} lh={lh} />
 
           {showUpgradePending ? (
@@ -302,7 +396,7 @@ export default function AccountScreen() {
               <Text style={[styles.label, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
                 {t('account.memberStatus')}
               </Text>
-              <View style={[styles.pendingStatusBox, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+              <View style={[styles.pendingStatusBox, { backgroundColor: nestedFill, borderColor: cardBorder }]}>
                 <View style={styles.pendingStatusRow}>
                   <RotatingSandTimer color={colors.primary} size={22} />
                   <Text
@@ -465,7 +559,7 @@ export default function AccountScreen() {
                   ) : null}
                 </Pressable>
               ) : (
-                <View style={[styles.upgradeBox, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+                <View style={[styles.upgradeBox, { backgroundColor: nestedFill, borderColor: cardBorder }]}>
                   <Text
                     style={[
                       styles.upgradeIntro,
@@ -476,7 +570,7 @@ export default function AccountScreen() {
 
                   <Button
                     mode="contained"
-                    onPress={openUpgradeModal}
+                    onPress={withHapticPress(openUpgradeModal)}
                     style={styles.upgradeButton}
                     contentStyle={styles.upgradeButtonContent}>
                     {t('account.upgrade')}
@@ -485,9 +579,13 @@ export default function AccountScreen() {
               )}
             </>
           ) : null}
-        </View>
+        </LiquidSurface>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <LiquidSurface
+          style={[styles.card, { borderColor: cardBorder }]}
+          backgroundColor={colors.card}
+          glassStyle="regular"
+          interactive>
           <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>{t('account.myAddresses')}</Text>
           <Text style={[styles.themeSubtitle, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
             {t('account.addressesSubtitle')}
@@ -495,50 +593,66 @@ export default function AccountScreen() {
           <Button
             mode="contained"
             icon="map-marker"
-            onPress={() => router.push('/addresses' as Href)}
+            onPress={withHapticPress(() => router.push('/addresses' as Href))}
             style={styles.addressButton}>
             {t('account.manageAddresses')}
           </Button>
-        </View>
+        </LiquidSurface>
 
-        <Pressable
-          onPress={() => router.push('/notifications' as Href)}
-          style={[styles.card, styles.navRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.navTextWrap}>
-            <View style={styles.navTitleRow}>
-              <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
-                {t('account.notifications')}
+        <LiquidSurface
+          style={[styles.card, { borderColor: cardBorder }]}
+          backgroundColor={colors.card}
+          glassStyle="regular"
+          interactive>
+          <Pressable
+            onPress={withHapticPress(() => router.push('/notifications' as Href))}
+            style={styles.navRow}>
+            <View style={styles.navTextWrap}>
+              <View style={styles.navTitleRow}>
+                <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
+                  {t('account.notifications')}
+                </Text>
+                {unreadCount > 0 ? (
+                  <View style={[styles.badge, { backgroundColor: colors.danger }]}>
+                    <Text style={[styles.badgeText, { color: colors.onPrimary }]}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={[styles.themeSubtitle, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
+                {t('account.notificationsSubtitle')}
               </Text>
-              {unreadCount > 0 ? (
-                <View style={[styles.badge, { backgroundColor: colors.danger }]}>
-                  <Text style={[styles.badgeText, { color: colors.onPrimary }]}>
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </Text>
-                </View>
-              ) : null}
             </View>
-            <Text style={[styles.themeSubtitle, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
-              {t('account.notificationsSubtitle')}
-            </Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={16} color={colors.textMuted} />
-        </Pressable>
+            <MaterialCommunityIcons name="chevron-right" size={16} color={colors.textMuted} />
+          </Pressable>
+        </LiquidSurface>
 
-        <Pressable
-          onPress={() => router.push('/change-password' as Href)}
-          style={[styles.card, styles.navRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.navTextWrap}>
-            <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
-              {t('account.resetPassword')}
-            </Text>
-            <Text style={[styles.themeSubtitle, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
-              {t('account.resetPasswordSubtitle')}
-            </Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={16} color={colors.textMuted} />
-        </Pressable>
+        <LiquidSurface
+          style={[styles.card, { borderColor: cardBorder }]}
+          backgroundColor={colors.card}
+          glassStyle="regular"
+          interactive>
+          <Pressable
+            onPress={withHapticPress(() => router.push('/change-password' as Href))}
+            style={styles.navRow}>
+            <View style={styles.navTextWrap}>
+              <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
+                {t('account.resetPassword')}
+              </Text>
+              <Text style={[styles.themeSubtitle, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
+                {t('account.resetPasswordSubtitle')}
+              </Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={16} color={colors.textMuted} />
+          </Pressable>
+        </LiquidSurface>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <LiquidSurface
+          style={[styles.card, { borderColor: cardBorder }]}
+          backgroundColor={colors.card}
+          glassStyle="regular"
+          interactive>
           <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
             {t('account.language')}
           </Text>
@@ -546,9 +660,13 @@ export default function AccountScreen() {
             {t('account.languageSubtitle')}
           </Text>
           <LanguageDropdown />
-        </View>
+        </LiquidSurface>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <LiquidSurface
+          style={[styles.card, { borderColor: cardBorder }]}
+          backgroundColor={colors.card}
+          glassStyle="regular"
+          interactive>
           <View style={styles.themeRow}>
             <View style={styles.themeTextWrap}>
               <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
@@ -574,11 +692,132 @@ export default function AccountScreen() {
               style={styles.segmented}
             />
           ) : null}
-        </View>
+        </LiquidSurface>
 
-        <Button mode="outlined" onPress={signOut} style={styles.logoutButton}>
-          {t('account.signOut')}
-        </Button>
+        <LiquidSurface
+          style={[styles.card, { borderColor: cardBorder }]}
+          backgroundColor={colors.card}
+          glassStyle="regular"
+          interactive>
+          <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
+            {t('account.needHelp')}
+          </Text>
+          <Text
+            style={[
+              styles.themeSubtitle,
+              styles.helpSubtitle,
+              { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) },
+            ]}>
+            {t('account.needHelpSubtitle')}
+          </Text>
+
+          <View style={styles.helpActionsRow}>
+            {(
+              [
+                {
+                  key: 'call' as const,
+                  label: t('account.helpCall'),
+                },
+                {
+                  key: 'viber' as const,
+                  label: t('account.helpViber'),
+                },
+                {
+                  key: 'facebook' as const,
+                  label: t('account.helpFacebook'),
+                },
+              ] as const
+            ).map((action) => (
+              <Pressable
+                key={action.key}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  action.key === 'call'
+                    ? `${action.label}. ${formatSupportPhone(SUPPORT_CONFIG.phoneDisplay)}`
+                    : action.label
+                }
+                onPress={() => {
+                  if (action.key === 'call') {
+                    hapticLight();
+                    setPhoneActionsVisible(true);
+                    return;
+                  }
+                  void openSupportChannel(action.key);
+                }}
+                style={({ pressed }) => [styles.helpAction, pressed && styles.helpActionPressed]}>
+                <View
+                  style={[
+                    styles.helpActionIconWell,
+                    {
+                      backgroundColor:
+                        action.key === 'call'
+                          ? nestedFill
+                          : action.key === 'viber'
+                            ? 'rgba(115, 96, 242, 0.12)'
+                            : 'rgba(24, 119, 242, 0.12)',
+                    },
+                  ]}>
+                  {action.key === 'call' ? (
+                    <MaterialCommunityIcons name="phone" size={22} color={colors.primary} />
+                  ) : action.key === 'viber' ? (
+                    <ViberLogo size={26} />
+                  ) : (
+                    <FacebookLogo size={26} />
+                  )}
+                </View>
+                <Text
+                  style={[
+                    styles.helpActionLabel,
+                    { color: colors.text, fontSize: fs(rs(12)), lineHeight: lh(12) },
+                  ]}>
+                  {action.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </LiquidSurface>
+
+        <LiquidSurface
+          style={[styles.card, { borderColor: cardBorder }]}
+          backgroundColor={colors.card}
+          glassStyle="regular"
+          interactive>
+          <Pressable
+            onPress={withHapticPress(() => {
+              void openStoreReviewPage();
+            })}
+            style={styles.navRow}>
+            <View style={styles.navTextWrap}>
+              <View style={styles.navTitleRow}>
+                <MaterialCommunityIcons name="star-outline" size={20} color={colors.primary} />
+                <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
+                  {t('account.rateStore')}
+                </Text>
+              </View>
+              <Text style={[styles.themeSubtitle, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
+                {t('account.rateStoreSubtitle')}
+              </Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={16} color={colors.textMuted} />
+          </Pressable>
+        </LiquidSurface>
+
+        <LiquidSurface
+          style={[styles.logoutShell, { borderColor: cardBorder }]}
+          backgroundColor={colors.card}
+          cornerRadius={12}
+          glassStyle="regular"
+          interactive>
+          <Button
+            mode="text"
+            icon="logout"
+            textColor={colors.danger}
+            onPress={withHapticPress(signOut, 'medium')}
+            style={styles.logoutButton}
+            contentStyle={styles.logoutButtonContent}>
+            {t('account.signOut')}
+          </Button>
+        </LiquidSurface>
       </ScrollView>
 
       <MembershipUpgradeModal
@@ -586,6 +825,96 @@ export default function AccountScreen() {
         isSubmitting={isSubmittingUpgrade}
         onClose={closeUpgradeModal}
         onSelectPlan={handleSelectPlan}
+      />
+
+      <Modal
+        visible={phoneActionsVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPhoneActionsVisible(false)}>
+        <View style={styles.phoneSheetBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setPhoneActionsVisible(false)} />
+          <LiquidSurface
+            style={[
+              styles.phoneSheetCard,
+              {
+                borderColor: liquid
+                  ? liquidGlassBorder(isDark)
+                  : isDark
+                    ? 'rgba(67, 189, 182, 0.5)'
+                    : 'rgba(13, 148, 136, 0.4)',
+              },
+            ]}
+            backgroundColor={isDark ? '#1A3D3A' : '#E6F7F5'}
+            tintColor={liquid ? liquidGlassTint(isDark) : undefined}
+            glassStyle="regular"
+            interactive
+            cornerRadius={18}>
+            {/* Cross sits in its own top row — not aligned with Call/Copy icons. */}
+            <View style={styles.phoneSheetHeader}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('common.close')}
+                hitSlop={10}
+                onPress={() => setPhoneActionsVisible(false)}
+                style={styles.phoneSheetClose}>
+                <MaterialCommunityIcons name="close" size={22} color={colors.textMuted} />
+              </Pressable>
+            </View>
+
+            <Text
+              style={[
+                styles.phoneSheetNumber,
+                { color: colors.text, fontSize: fs(rs(22)), lineHeight: lh(22) },
+              ]}>
+              {formatSupportPhone(SUPPORT_CONFIG.phoneDisplay)}
+            </Text>
+
+            <View style={styles.phoneSheetActionsRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('account.helpCall')}
+                onPress={handleCallPhone}
+                style={({ pressed }) => [styles.phoneSheetIconAction, pressed && styles.phoneSheetIconPressed]}>
+                <View style={[styles.phoneSheetIconWell, { backgroundColor: nestedFill }]}>
+                  <MaterialCommunityIcons name="phone" size={26} color={colors.primary} />
+                </View>
+                <Text
+                  style={[
+                    styles.phoneSheetActionLabel,
+                    { color: colors.text, fontSize: fs(rs(13)), lineHeight: lh(13) },
+                  ]}>
+                  {t('account.helpCall')}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('account.helpCopyNumber')}
+                onPress={() => {
+                  void handleCopyPhone();
+                }}
+                style={({ pressed }) => [styles.phoneSheetIconAction, pressed && styles.phoneSheetIconPressed]}>
+                <View style={[styles.phoneSheetIconWell, { backgroundColor: nestedFill }]}>
+                  <MaterialCommunityIcons name="content-copy" size={26} color={colors.primary} />
+                </View>
+                <Text
+                  style={[
+                    styles.phoneSheetActionLabel,
+                    { color: colors.text, fontSize: fs(rs(13)), lineHeight: lh(13) },
+                  ]}>
+                  {t('account.helpCopyNumber')}
+                </Text>
+              </Pressable>
+            </View>
+          </LiquidSurface>
+        </View>
+      </Modal>
+
+      <TabAppToast
+        message={phoneToast}
+        visible={!!phoneToast}
+        onDismiss={() => setPhoneToast('')}
       />
 
       <CelebrationBurst active={showCelebration} onFinished={() => setShowCelebration(false)} />
@@ -627,7 +956,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingTop: 16,
-    paddingBottom: 32,
+    paddingBottom: 120,
   },
   card: {
     borderWidth: 1,
@@ -733,6 +1062,103 @@ const styles = StyleSheet.create({
   addressButton: {
     marginTop: 12,
   },
+  helpSubtitle: {
+    marginBottom: 14,
+  },
+  phoneSheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 48,
+  },
+  phoneSheetCard: {
+    width: '100%',
+    maxWidth: 280,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 14,
+    zIndex: 1,
+    alignItems: 'center',
+  },
+  phoneSheetHeader: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    minHeight: 36,
+    marginBottom: 4,
+  },
+  phoneSheetClose: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  phoneSheetNumber: {
+    textAlign: 'center',
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  phoneSheetActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignSelf: 'stretch',
+    marginBottom: 12,
+  },
+  phoneSheetIconAction: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minWidth: 96,
+    paddingVertical: 4,
+  },
+  phoneSheetIconPressed: {
+    opacity: 0.75,
+    transform: [{ scale: 0.96 }],
+  },
+  phoneSheetIconWell: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  phoneSheetActionLabel: {
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  helpActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  helpAction: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  helpActionPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.96 }],
+  },
+  helpActionIconWell: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  helpActionLabel: {
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   navRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -759,11 +1185,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  logoutButton: {
-    marginTop: 8,
+  logoutShell: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    marginBottom: 8,
+    overflow: 'hidden',
   },
-  errorText: {
-    marginBottom: 12,
-    textAlign: 'center',
+  logoutButton: {
+    marginTop: 0,
+  },
+  logoutButtonContent: {
+    minHeight: 48,
+  },
+  errorBanner: {
+    marginHorizontal: 0,
   },
 });

@@ -1,4 +1,6 @@
 import { apiRequest } from '@/services/api-client';
+import { throwIfUnauthorized } from '@/services/auth-error';
+import { getApiFallbackMessage } from '@/services/network-error';
 
 export type ProductNotification = {
   id: string;
@@ -44,8 +46,9 @@ export async function fetchNotifications(token: string) {
     { token },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, 'Failed to load notifications.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('loadNotifications')));
   }
 
   return data.notifications;
@@ -61,8 +64,9 @@ export async function registerPushToken(token: string, expoPushToken: string, la
     },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data?.success) {
-    throw new Error(getApiError(data, 'Failed to register push token.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('generic')));
   }
 }
 
@@ -76,8 +80,9 @@ export async function unregisterPushToken(token: string, expoPushToken?: string 
     },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data?.success) {
-    throw new Error(getApiError(data, 'Failed to remove push token.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('generic')));
   }
 }
 
@@ -90,8 +95,9 @@ export async function sendTestPush(token: string) {
     },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data?.success) {
-    throw new Error(getApiError(data, 'Failed to send test push.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('generic')));
   }
 }
 
@@ -116,8 +122,9 @@ export async function fetchPushStatus(token: string): Promise<PushStatus> {
     | ApiErrorResponse
   >('/api/notifications/push-status', { token });
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || data.success !== true) {
-    throw new Error(getApiError(data, 'Failed to load push status.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('generic')));
   }
 
   return {

@@ -209,8 +209,10 @@ export function ProductCardSkeleton({ width }: ProductCardSkeletonProps) {
       <SkeletonBox style={styles.image} borderRadius={0} />
       <View style={styles.content}>
         <SkeletonBox style={[styles.nameBlock, { height: nameHeight }]} borderRadius={6} />
-        <SkeletonBox style={styles.priceLine} borderRadius={6} />
-        <SkeletonBox style={styles.button} borderRadius={10} />
+        <View style={styles.bottomRow}>
+          <SkeletonBox style={styles.priceLine} borderRadius={6} />
+          <SkeletonBox style={styles.plusBtn} borderRadius={999} />
+        </View>
       </View>
     </View>
   );
@@ -237,32 +239,34 @@ const styles = StyleSheet.create({
     flex: 1,
     marginBottom: 12,
     overflow: 'hidden',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
   },
   image: {
     width: '100%',
-    aspectRatio: 1.2,
+    aspectRatio: 1,
   },
   content: {
-    flex: 1,
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 8,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 10,
+    gap: 8,
   },
   nameBlock: {
     width: '100%',
   },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   priceLine: {
     width: '42%',
     height: 16,
-    marginTop: 8,
   },
-  button: {
-    width: '100%',
-    height: 40,
-    marginTop: 'auto',
-    paddingTop: 10,
+  plusBtn: {
+    width: 32,
+    height: 32,
   },
   listItem: {
     flexDirection: 'row',

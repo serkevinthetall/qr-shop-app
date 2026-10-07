@@ -1,4 +1,6 @@
 import { apiRequest } from '@/services/api-client';
+import { throwIfUnauthorized } from '@/services/auth-error';
+import { getApiFallbackMessage } from '@/services/network-error';
 import type {
   Address,
   AddressMeta,
@@ -71,8 +73,9 @@ export async function fetchAddresses(token: string) {
     { token },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, 'Failed to load addresses.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('loadAddresses')));
   }
 
   return data.addresses;
@@ -84,8 +87,9 @@ export async function fetchAddressMeta(token: string) {
     { token },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, 'Failed to load address settings.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('loadAddresses')));
   }
 
   return {
@@ -104,8 +108,9 @@ export async function createAddress(token: string, payload: CreateAddressPayload
     },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throwAddressApiError(data, 'Failed to create address.');
+    throwAddressApiError(data, getApiFallbackMessage('generic'));
   }
 
   return data.address_id;
@@ -125,8 +130,9 @@ export async function updateAddress(
     },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throwAddressApiError(data, 'Failed to update address.');
+    throwAddressApiError(data, getApiFallbackMessage('generic'));
   }
 
   return data;
@@ -141,8 +147,9 @@ export async function deleteAddress(token: string, addressId: number) {
     },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, 'Failed to delete address.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('deleteAddress')));
   }
 
   return data;

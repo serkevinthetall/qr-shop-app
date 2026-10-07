@@ -6,10 +6,12 @@ import { translate, type Language } from '@/constants/translations';
 import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
 import { requestCatalogRefresh } from '@/services/catalog-events';
+import { getUserFacingError } from '@/services/auth-error';
 import {
   presentLocalNotification,
   getExpoPushToken,
   getExpoPushTokenWithRetry,
+  isRemotePushAvailable,
 } from '@/services/device-notifications';
 import {
   fetchNotifications,
@@ -151,7 +153,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           }
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load notifications.');
+        const message = getUserFacingError(
+          err,
+          translate(languageRef.current, 'notifications.error'),
+        );
+        if (message) setError(message);
       } finally {
         if (!silent) {
           setIsLoading(false);
@@ -214,12 +220,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     syncPushRegistration(true)
       .then((ok) => {
-        if (!ok && generation === pushSyncGenerationRef.current) {
+        // Expo Go has no remote push — skip the noisy "did not complete" warn.
+        if (!ok && generation === pushSyncGenerationRef.current && isRemotePushAvailable()) {
           console.warn('Push token registration did not complete after retries.');
         }
       })
       .catch((err) => {
-        console.warn('Push token registration failed:', err);
+        if (isRemotePushAvailable()) {
+          console.warn('Push token registration failed:', err);
+        }
       });
 
     return () => {
@@ -242,7 +251,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       if (state === 'active') {
         refresh(true);
         syncPushRegistration(true).catch((err) => {
-          console.warn('Push token registration failed:', err);
+          if (isRemotePushAvailable()) {
+            console.warn('Push token registration failed:', err);
+          }
         });
       }
     });

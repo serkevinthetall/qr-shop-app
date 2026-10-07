@@ -25,5 +25,5 @@ fi
 echo "Using JAVA_HOME=$JAVA_HOME"
 "$JAVA_HOME/bin/java" -version
 
-# Profile env in eas.json already sets primary + Netlify fallback for local-apk.
+# Profile env in eas.json sets EXPO_PUBLIC_API_BASE_URL for local-apk.
 exec eas build --local --platform android --profile local-apk --non-interactive "$@"

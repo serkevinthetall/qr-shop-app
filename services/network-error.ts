@@ -12,6 +12,16 @@ export function getNetworkErrorMessage(error: unknown) {
     return translate(currentLanguage, 'network.cannotConnect');
   }
 
+  // Expo cancel (not our timeout abort) — keep message recognizable so
+  // getUserFacingError can hide it instead of showing a scary banner.
+  if (
+    /FetchRequestCanceledException|Fetch request has been canceled|Fetch request has been cancelled/i.test(
+      error.message,
+    )
+  ) {
+    return error.message;
+  }
+
   if (error.name === 'AbortError') {
     return translate(currentLanguage, 'network.timedOut');
   }
@@ -29,4 +39,37 @@ export function getNetworkErrorMessage(error: unknown) {
 
 export function getInvalidResponseMessage() {
   return translate(currentLanguage, 'network.invalidResponse');
+}
+
+/** Localized fallback for domain API failures (keeps services language-aware). */
+export function getApiFallbackMessage(
+  key:
+    | 'loadProducts'
+    | 'refreshProducts'
+    | 'searchProducts'
+    | 'loadCategories'
+    | 'loadProduct'
+    | 'productNotFound'
+    | 'loadOrders'
+    | 'refreshOrders'
+    | 'loadOrder'
+    | 'reorderFailed'
+    | 'loadAccount'
+    | 'refreshAccount'
+    | 'upgradeFailed'
+    | 'signInAgain'
+    | 'loadAddresses'
+    | 'deleteAddress'
+    | 'loadAddressList'
+    | 'addressRefreshFailed'
+    | 'checkoutFailed'
+    | 'changePasswordFailed'
+    | 'loadNotifications'
+    | 'loadMembership'
+    | 'loadCoupons'
+    | 'loadDeliveryFee'
+    | 'loadProfile'
+    | 'generic',
+) {
+  return translate(currentLanguage, `errors.${key}`);
 }

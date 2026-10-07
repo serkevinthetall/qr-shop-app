@@ -109,8 +109,8 @@ function getEasProjectId() {
 }
 
 export async function getExpoPushToken(): Promise<string | null> {
+  // Expo Go cannot receive remote push — skip quietly (no LogBox).
   if (!isRemotePushAvailable()) {
-    console.warn('Push token skipped: Expo Go does not support remote push.');
     return null;
   }
 
@@ -157,6 +157,10 @@ function wait(ms: number) {
 export async function getExpoPushTokenWithRetry(
   delaysMs: number[] = PUSH_TOKEN_RETRY_DELAYS_MS,
 ): Promise<string | null> {
+  if (!isRemotePushAvailable()) {
+    return null;
+  }
+
   for (let index = 0; index < delaysMs.length; index += 1) {
     const delay = delaysMs[index];
 

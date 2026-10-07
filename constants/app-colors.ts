@@ -113,10 +113,10 @@ export const AppColors: { light: AppColorTokens; dark: AppColorTokens } = {
     danger: '#dc2626',
     dangerBg: '#fee2e2',
 
-    // Tabs / navigation
+    // Tabs / navigation — solid chrome so the bar doesn't vanish into white cards
     tabBar: '#ffffff',
-    tabBarBorder: '#e8ebe9',
-    tabIconDefault: '#9aa4b2',
+    tabBarBorder: '#c5cdc8',
+    tabIconDefault: '#5f6b76',
     tabIconSelected: '#0d9488',
     tint: '#0d9488',
 
@@ -152,10 +152,10 @@ export const AppColors: { light: AppColorTokens; dark: AppColorTokens } = {
     danger: '#F87171',
     dangerBg: '#7F1D1D',
 
-    // Tabs / navigation
-    tabBar: '#1D2525',
-    tabBarBorder: '#2A3333',
-    tabIconDefault: '#9BA8A7',
+    // Tabs / navigation — neutral elevated charcoal (avoids green/ERP cast)
+    tabBar: '#1E2224',
+    tabBarBorder: '#3A4246',
+    tabIconDefault: '#A8B0B6',
     tabIconSelected: '#43BDB6',
     tint: '#43BDB6',
 

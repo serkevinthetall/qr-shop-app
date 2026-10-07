@@ -47,6 +47,12 @@ export function noteApiBaseSuccess(baseUrl: string) {
   void AsyncStorage.setItem(PREFERRED_API_BASE_KEY, next).catch(() => undefined);
 }
 
+/** Drop stuck fallback host so the next request prefers primary again. */
+export function clearPreferredApiBase() {
+  preferredBaseUrl = API_BASE_URL;
+  void AsyncStorage.removeItem(PREFERRED_API_BASE_KEY).catch(() => undefined);
+}
+
 /** Restore last working API host (avoids waiting on dead primary every cold start). */
 export function hydratePreferredApiBase() {
   if (!hydratePromise) {

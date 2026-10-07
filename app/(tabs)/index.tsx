@@ -5,6 +5,7 @@ import {
   AppState,
   ActivityIndicator,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -13,22 +14,30 @@ import {
   View,
 } from 'react-native';
 import { Searchbar } from 'react-native-paper';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ProductCard, ProductListItem } from '@/components/products/product-card';
 import { ProductCardSkeleton, ProductListItemSkeleton } from '@/components/products/product-card-skeleton';
 import { SkeletonBox } from '@/components/skeleton';
 import { CategoryList } from '@/components/products/category-list';
 import { TabAppToast } from '@/components/app-toast';
+import { InlineErrorBanner } from '@/components/inline-error-banner';
 import { LanguageToggleChip } from '@/components/language-toggle-chip';
+import { ScrollToTopButton } from '@/components/scroll-to-top-button';
 import { ViewModeToggleButton } from '@/components/view-mode-toggle-button';
-import { searchbarInputStyle } from '@/constants/text-input';
+import { inputCaretProps, searchbarInputStyleFor } from '@/constants/text-input';
 import { useAuth } from '@/contexts/auth-context';
 import { useCart } from '@/contexts/cart-context';
 import { useLanguage } from '@/contexts/language-context';
-import { useAppColors } from '@/contexts/theme-context';
+import {
+  useLiquidTabBarScrollProps,
+  useRevealLiquidTabBar,
+} from '@/contexts/liquid-tab-bar-visibility';
+import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
+import { isLiquidUiEnabled, liquidGlassFill } from '@/utils/liquid-ui';
 import { takeCatalogBootstrap } from '@/services/catalog-bootstrap';
+import { getUserFacingError } from '@/services/auth-error';
 import { onCatalogRefreshRequested } from '@/services/catalog-events';
 import { fetchPartnerTags } from '@/services/customer-api';
 import { rememberProductPreview } from '@/services/product-preview-cache';
@@ -60,10 +69,31 @@ function readBootstrapSeed() {
 export default function ProductsScreen() {
   const router = useRouter();
   const colors = useAppColors();
+  const { isDark } = useThemeMode();
+  const insets = useSafeAreaInsets();
   const { rs, horizontalPadding, gridColumns, gridGap, width } = useResponsive();
   const { token } = useAuth();
-  const { addToCart, syncPricesFromProducts } = useCart();
-  const { t, lh } = useLanguage();
+  const { syncPricesFromProducts } = useCart();
+  const { t, lh, language } = useLanguage();
+  const liquid = isLiquidUiEnabled();
+  const tabBarScrollProps = useLiquidTabBarScrollProps();
+  const revealTabBar = useRevealLiquidTabBar();
+  const listRef = useRef<FlatList<Product>>(null);
+  const scrollOffsetRef = useRef(0);
+  const scrollTopRafRef = useRef<number | null>(null);
+  const scrollIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [scrollToTopEligible, setScrollToTopEligible] = useState(false);
+  const [isListScrolling, setIsListScrolling] = useState(false);
+  // Visible gray outline (inputBg ≈ screen bg, so theme.border is too faint).
+  const searchOutline = isDark ? '#5C6868' : '#B0B5BD';
+  // Myanmar glyphs need more vertical room than Latin in the search pill.
+  const isMyanmar = language === 'my';
+  const searchBarHeight = isMyanmar ? 54 : 48;
+  const headerControlStyle = {
+    backgroundColor: liquid ? liquidGlassFill(isDark) : colors.inputBg,
+    borderColor: searchOutline,
+    borderWidth: 1,
+  };
   const [bootstrapSeed] = useState(readBootstrapSeed);
   const [products, setProducts] = useState<Product[]>(bootstrapSeed.products);
   const [allProducts, setAllProducts] = useState<Product[]>(bootstrapSeed.products);
@@ -78,6 +108,10 @@ export default function ProductsScreen() {
   const [error, setError] = useState('');
   const [snackbar, setSnackbar] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  /** Height of chip row so products can scroll underneath it. */
+  const [chipBarHeight, setChipBarHeight] = useState(52);
+  /** List viewport height — Android pull spinner is offset to the middle. */
+  const [listAreaHeight, setListAreaHeight] = useState(0);
 
   const searchQueryRef = useRef(searchQuery);
   const selectedCategoryRef = useRef(selectedCategoryId);
@@ -208,6 +242,54 @@ export default function ProductsScreen() {
     changeViewMode(viewMode === 'grid' ? 'list' : 'grid');
   }, [changeViewMode, viewMode]);
 
+  const handleScrollToTop = useCallback(() => {
+    if (scrollTopRafRef.current != null) {
+      cancelAnimationFrame(scrollTopRafRef.current);
+      scrollTopRafRef.current = null;
+    }
+    if (scrollIdleTimerRef.current) {
+      clearTimeout(scrollIdleTimerRef.current);
+      scrollIdleTimerRef.current = null;
+    }
+    setIsListScrolling(true);
+
+    const startY = Math.max(0, scrollOffsetRef.current);
+    if (startY <= 2) {
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+      setScrollToTopEligible(false);
+      setIsListScrolling(false);
+      revealTabBar();
+      return;
+    }
+
+    // Luxury glide — longer, soft ease-out (not snappy).
+    const durationMs = 980;
+    const startTime = Date.now();
+
+    const step = () => {
+      const t = Math.min(1, (Date.now() - startTime) / durationMs);
+      // easeOutQuint — fast start, long silky settle
+      const eased = 1 - Math.pow(1 - t, 5);
+      const nextY = startY * (1 - eased);
+      listRef.current?.scrollToOffset({ offset: nextY, animated: false });
+      scrollOffsetRef.current = nextY;
+
+      if (t < 1) {
+        scrollTopRafRef.current = requestAnimationFrame(step);
+        return;
+      }
+
+      scrollTopRafRef.current = null;
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+      scrollOffsetRef.current = 0;
+      setScrollToTopEligible(false);
+      setIsListScrolling(false);
+      revealTabBar();
+    };
+
+    scrollTopRafRef.current = requestAnimationFrame(step);
+  }, [revealTabBar]);
+
   const numColumns = viewMode === 'list' ? 1 : gridColumns;
 
   const cardWidth = useMemo(() => {
@@ -215,6 +297,49 @@ export default function ProductsScreen() {
     const totalGaps = gridGap * (gridColumns - 1);
     return (width - totalHorizontalPadding - totalGaps) / gridColumns;
   }, [width, horizontalPadding, gridColumns, gridGap]);
+
+  /** Show ↑ after ~6 product rows (not only at the bottom). */
+  const scrollToTopAfterY = useMemo(() => {
+    const listRowHeight = 110;
+    const gridRowHeight = cardWidth + 72;
+    const rowHeight = viewMode === 'list' ? listRowHeight : gridRowHeight;
+    return Math.round(rowHeight * 6);
+  }, [cardWidth, viewMode]);
+
+  const handleProductsScroll = useCallback(
+    (event: {
+      nativeEvent: {
+        contentOffset: { y: number };
+        contentSize: { height: number };
+        layoutMeasurement: { height: number };
+      };
+    }) => {
+      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+      scrollOffsetRef.current = contentOffset.y;
+      const scrollable = contentSize.height > layoutMeasurement.height + 80;
+      const pastRows = scrollable && contentOffset.y >= scrollToTopAfterY;
+      setScrollToTopEligible((prev) => (prev === pastRows ? prev : pastRows));
+
+      // Hide ↑ while scrolling; show again shortly after the finger/list settles.
+      setIsListScrolling(true);
+      if (scrollIdleTimerRef.current) {
+        clearTimeout(scrollIdleTimerRef.current);
+      }
+      scrollIdleTimerRef.current = setTimeout(() => {
+        setIsListScrolling(false);
+        scrollIdleTimerRef.current = null;
+      }, 160);
+    },
+    [scrollToTopAfterY],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (scrollIdleTimerRef.current) {
+        clearTimeout(scrollIdleTimerRef.current);
+      }
+    };
+  }, []);
 
   const skeletonCount = viewMode === 'list' ? SKELETON_LIST_COUNT : gridColumns * 3;
 
@@ -354,21 +479,25 @@ export default function ProductsScreen() {
     try {
       const next = await fetchCategories();
       setCategories(next);
+    } catch (err) {
+      const message = getUserFacingError(err, t('errors.loadCategories'), t);
+      if (message) setError(message);
     } finally {
       setIsCategoriesLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     syncCatalog()
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load products.');
+        const message = getUserFacingError(err, t('errors.loadProducts'), t);
+        if (message) setError(message);
       })
       .finally(() => {
         setIsLoading(false);
         initialLoadDoneRef.current = true;
       });
-  }, [syncCatalog]);
+  }, [syncCatalog, t]);
 
   // Re-fetch with the auth token after login/logout so membership prices apply.
   useEffect(() => {
@@ -397,8 +526,9 @@ export default function ProductsScreen() {
     const timeoutId = setTimeout(
       () => {
         syncCatalog({ silent: true })
-          .catch(() => {
-            // Keep the current list if a background sync fails.
+          .catch((err) => {
+            const message = getUserFacingError(err, t('errors.searchProducts'), t);
+            if (message) setError(message);
           })
           .finally(() => setIsSearching(false));
       },
@@ -406,7 +536,7 @@ export default function ProductsScreen() {
     );
 
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, isLoading, syncCatalog]);
+  }, [searchQuery, isLoading, syncCatalog, t]);
 
   useEffect(() => {
     if (isLoading) {
@@ -475,6 +605,10 @@ export default function ProductsScreen() {
   );
 
   const handleRefresh = async () => {
+    if (isRefreshing) {
+      return;
+    }
+
     setIsRefreshing(true);
     setSearchQuery('');
     searchQueryRef.current = '';
@@ -499,7 +633,8 @@ export default function ProductsScreen() {
       skipNextCategorySyncRef.current = true;
       await syncCatalog();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to refresh products.');
+      const message = getUserFacingError(err, t('errors.refreshProducts'), t);
+      if (message) setError(message);
     } finally {
       setIsRefreshing(false);
     }
@@ -510,11 +645,11 @@ export default function ProductsScreen() {
       <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
         <View
           style={[
-            styles.header,
+            styles.searchSection,
             {
-              backgroundColor: colors.surface,
-              borderBottomColor: colors.border,
+              backgroundColor: 'transparent',
               paddingHorizontal: horizontalPadding,
+              paddingTop: 8,
             },
           ]}>
           <View style={styles.searchRow}>
@@ -524,15 +659,18 @@ export default function ProductsScreen() {
           </View>
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          scrollEnabled={false}
-          contentContainerStyle={[styles.categorySkeletonRow, { paddingHorizontal: horizontalPadding }]}>
-          {Array.from({ length: 5 }, (_, index) => (
-            <SkeletonBox key={index} style={styles.categorySkeletonChip} borderRadius={20} />
-          ))}
-        </ScrollView>
+        <View style={[styles.chipSection, { backgroundColor: 'transparent' }]}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={false}
+            style={{ backgroundColor: 'transparent' }}
+            contentContainerStyle={[styles.categorySkeletonRow, { paddingHorizontal: horizontalPadding }]}>
+            {Array.from({ length: 5 }, (_, index) => (
+              <SkeletonBox key={index} style={styles.categorySkeletonChip} borderRadius={20} />
+            ))}
+          </ScrollView>
+        </View>
 
         <FlatList
           data={skeletonItems}
@@ -543,7 +681,7 @@ export default function ProductsScreen() {
           style={styles.productsList}
           contentContainerStyle={[
             styles.listContent,
-            { paddingHorizontal: horizontalPadding - 4, paddingTop: rs(12) },
+            { paddingHorizontal: horizontalPadding - 4, paddingTop: rs(8) },
           ]}
           columnWrapperStyle={numColumns > 1 ? { gap: gridGap, alignItems: 'stretch' } : undefined}
           renderItem={() =>
@@ -561,62 +699,144 @@ export default function ProductsScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingHorizontal: horizontalPadding }]}>
-        <View style={styles.searchRow}>
-          <Searchbar
-            placeholder={t('products.searchPlaceholder')}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            style={[styles.searchbar, { backgroundColor: colors.inputBg, flex: 1 }]}
-            inputStyle={searchbarInputStyle}
-            iconColor={colors.textMuted}
-            placeholderTextColor={colors.textMuted}
-          />
+    <SafeAreaView
+      style={[styles.screen, { backgroundColor: colors.background }]}
+      edges={liquid ? [] : ['top']}>
+      {/* 1 — Search stays fixed above; products never go under it */}
+      <View
+        style={[
+          styles.searchSection,
+          {
+            paddingHorizontal: horizontalPadding,
+            paddingTop: (liquid ? insets.top : 0) + 8,
+            backgroundColor: colors.background,
+          },
+        ]}>
+        <View style={[styles.searchRow, { minHeight: searchBarHeight }]}>
+          <View
+            style={[
+              styles.searchbarShell,
+              {
+                height: searchBarHeight,
+                borderRadius: searchBarHeight / 2,
+                backgroundColor: liquid ? liquidGlassFill(isDark) : colors.inputBg,
+                borderColor: searchOutline,
+                borderWidth: 1,
+              },
+            ]}>
+            <Searchbar
+              placeholder={t('products.searchPlaceholder')}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              elevation={0}
+              mode="bar"
+              style={[
+                styles.searchbar,
+                {
+                  height: searchBarHeight,
+                  borderRadius: searchBarHeight / 2,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  overflow: 'visible',
+                },
+              ]}
+              inputStyle={searchbarInputStyleFor(language)}
+              iconColor={colors.textMuted}
+              placeholderTextColor={colors.textMuted}
+              {...inputCaretProps(isDark)}
+            />
+          </View>
           <ViewModeToggleButton
             viewMode={viewMode}
             onPress={toggleViewMode}
             accessibilityLabel={viewMode === 'grid' ? t('products.viewList') : t('products.viewGrid')}
+            style={headerControlStyle}
           />
-          <LanguageToggleChip />
+          <LanguageToggleChip style={headerControlStyle} />
         </View>
+        {error ? (
+          <InlineErrorBanner
+            message={error}
+            onRetry={() => {
+              void handleRefresh();
+            }}
+            onDismiss={() => setError('')}
+            retrying={isRefreshing}
+          />
+        ) : null}
       </View>
 
-      {error ? (
-        <View style={{ paddingHorizontal: horizontalPadding }}>
-          <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
-        </View>
-      ) : null}
-
-      <CategoryList
-        categories={categories}
-        selectedCategoryId={selectedCategoryId}
-        isLoading={isCategoriesLoading}
-        horizontalPadding={horizontalPadding}
-        showJustForYou={showJustForYou}
-        onSelect={handleCategorySelect}
-      />
-
-      <View style={styles.listArea}>
+      {/* Products fill the rest; chip bar floats on top so cards scroll under chips only */}
+      <View
+        style={styles.listArea}
+        onLayout={(event) => {
+          const next = Math.round(event.nativeEvent.layout.height);
+          if (next > 0 && next !== listAreaHeight) {
+            setListAreaHeight(next);
+          }
+        }}>
         <FlatList
+          ref={listRef}
           data={products}
           key={`${viewMode}-${numColumns}`}
           keyExtractor={(item) => String(item.id)}
           numColumns={numColumns}
           style={styles.productsList}
-          contentContainerStyle={[styles.listContent, { paddingHorizontal: horizontalPadding - 4, paddingTop: rs(12) }]}
+          contentContainerStyle={[
+            styles.listContent,
+            {
+              paddingHorizontal: horizontalPadding - 4,
+              paddingTop: chipBarHeight + rs(8),
+            },
+          ]}
           columnWrapperStyle={numColumns > 1 ? { gap: gridGap, alignItems: 'stretch' } : undefined}
-          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
+          removeClippedSubviews={liquid ? false : undefined}
+          onScroll={handleProductsScroll}
+          scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              {...(Platform.OS === 'android'
+                ? {
+                    // Android cannot hide SwipeRefreshLayout — place it in the
+                    // middle of the list instead of stacking a second spinner.
+                    colors: [colors.primary],
+                    progressBackgroundColor: colors.card,
+                    progressViewOffset: Math.max(
+                      0,
+                      Math.round(listAreaHeight / 2) - 24,
+                    ),
+                  }
+                : {
+                    // iOS: hide native top spinner; use centered overlay below.
+                    tintColor: 'transparent',
+                  })}
+            />
+          }
+          {...tabBarScrollProps}
           ListEmptyComponent={
             isSearching ? null : (
               <View style={styles.emptyWrap}>
-                <Text style={[styles.emptyText, { color: colors.textMuted, lineHeight: lh(16) }]}>{t('products.empty')}</Text>
+                <Text style={[styles.emptyText, { color: colors.textMuted, lineHeight: lh(16) }]}>
+                  {error ? t('products.emptyError') : t('products.empty')}
+                </Text>
+                {error ? (
+                  <Pressable
+                    onPress={() => {
+                      void handleRefresh();
+                    }}
+                    style={[styles.emptyRetry, { backgroundColor: colors.primary }]}>
+                    <Text style={{ color: colors.onPrimary, fontWeight: '700', fontSize: 14 }}>
+                      {t('network.retry')}
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             )
           }
           renderItem={({ item }) => {
-            const handleAdd = (product: Product) => {
-              addToCart(product, 1);
+            const handleCartFeedback = (product: Product) => {
               setSnackbar(t('products.addedToCart', { name: product.name }));
             };
 
@@ -626,23 +846,65 @@ export default function ProductsScreen() {
             };
 
             return viewMode === 'list' ? (
-              <Pressable onPress={openDetail}>
-                <ProductListItem product={item} onAddToCart={handleAdd} />
-              </Pressable>
+              <ProductListItem
+                product={item}
+                onPressCard={openDetail}
+                onCartFeedback={handleCartFeedback}
+              />
             ) : (
-              <Pressable onPress={openDetail} style={{ width: cardWidth, flex: 1, alignSelf: 'stretch' }}>
-                <ProductCard product={item} width={cardWidth} onAddToCart={handleAdd} />
-              </Pressable>
+              <View style={{ width: cardWidth, flex: 1, alignSelf: 'stretch' }}>
+                <ProductCard
+                  product={item}
+                  width={cardWidth}
+                  onPressCard={openDetail}
+                  onCartFeedback={handleCartFeedback}
+                />
+              </View>
             );
           }}
         />
 
-        {isSearching ? (
+        {/* iOS refresh + all search: centered overlay. Android refresh uses native spinner (offset to middle). */}
+        {isSearching || (isRefreshing && Platform.OS !== 'android') ? (
           <View style={styles.centerLoading} pointerEvents="none">
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : null}
+
+        {/* 2 — Fully transparent chip bar; products scroll underneath */}
+        <View
+          pointerEvents="box-none"
+          style={styles.chipOverlay}
+          onLayout={(event) => {
+            const next = Math.round(event.nativeEvent.layout.height);
+            if (next > 0 && next !== chipBarHeight) {
+              setChipBarHeight(next);
+            }
+          }}>
+          <View
+            style={[
+              styles.chipSection,
+              {
+                backgroundColor: 'transparent',
+              },
+            ]}>
+            <CategoryList
+              categories={categories}
+              selectedCategoryId={selectedCategoryId}
+              isLoading={isCategoriesLoading}
+              horizontalPadding={horizontalPadding}
+              showJustForYou={showJustForYou}
+              onSelect={handleCategorySelect}
+            />
+          </View>
+        </View>
       </View>
+
+      <ScrollToTopButton
+        visible={scrollToTopEligible && !isListScrolling && products.length > 0}
+        onPress={handleScrollToTop}
+        accessibilityLabel={t('products.backToTop')}
+      />
 
       <TabAppToast
         message={snackbar}
@@ -658,15 +920,47 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    borderBottomWidth: 1,
-    paddingBottom: 12,
+    borderBottomWidth: 0,
+    paddingBottom: 4,
     paddingTop: 8,
     zIndex: 10,
+    backgroundColor: 'transparent',
+  },
+  /** Search row — no divider under it */
+  searchSection: {
+    zIndex: 10,
+    paddingBottom: 4,
+    borderBottomWidth: 0,
+    backgroundColor: 'transparent',
+  },
+  /** Chip bar — no border 2; closer under search */
+  chipSection: {
+    borderBottomWidth: 0,
+    backgroundColor: 'transparent',
+  },
+  chipOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    backgroundColor: 'transparent',
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  /** Outer shell — Paper Searchbar Surface often swallows border styles.
+   *  Do not use overflow:'hidden' here — on Android it clips the border away.
+   *  Height is set inline (48 EN / 54 MY). */
+  searchbarShell: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  searchbar: {
+    elevation: 0,
+    backgroundColor: 'transparent',
   },
   searchSkeleton: {
     flex: 1,
@@ -683,14 +977,11 @@ const styles = StyleSheet.create({
   },
   categorySkeletonRow: {
     gap: 8,
-    paddingVertical: 10,
+    paddingVertical: 4,
   },
   categorySkeletonChip: {
     height: 36,
     width: 88,
-  },
-  searchbar: {
-    elevation: 0,
   },
   productsList: {
     flex: 1,
@@ -698,27 +989,32 @@ const styles = StyleSheet.create({
   listArea: {
     flex: 1,
     position: 'relative',
-    marginTop: 12,
+    marginTop: 0,
   },
   listContent: {
-    paddingBottom: 24,
+    paddingBottom: 120,
     flexGrow: 1,
   },
   centerLoading: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
+    // Viewport middle of the list area — never pin under search / top of scroll.
+    zIndex: 15,
   },
   emptyWrap: {
     alignItems: 'center',
     paddingVertical: 48,
+    paddingHorizontal: 24,
+    gap: 16,
   },
   emptyText: {
     fontSize: 16,
-  },
-  errorText: {
     textAlign: 'center',
-    marginBottom: 8,
-    fontSize: 14,
+  },
+  emptyRetry: {
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
   },
 });

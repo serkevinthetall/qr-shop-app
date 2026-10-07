@@ -1,14 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { router } from 'expo-router';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
+import { clearPreferredApiBase } from '@/constants/api';
+import { useLanguage } from '@/contexts/language-context';
+import { trackLoginSuccess } from '@/services/analytics';
 import { loginWithApi, logoutFromApi } from '@/services/auth-api';
 import { clearSessionBootstrap } from '@/services/catalog-bootstrap';
-import { unregisterPushToken } from '@/services/notification-api';
 import { getExpoPushToken } from '@/services/device-notifications';
+import { unregisterPushToken } from '@/services/notification-api';
 import { registerPushForAuthSession } from '@/services/push-registration';
-import { trackLoginSuccess } from '@/services/analytics';
-import { useLanguage } from '@/contexts/language-context';
+import { registerSessionExpiredHandler } from '@/services/session-expired';
 
 const SESSION_KEY = 'qr-app-session';
 const TOKEN_KEY = 'qr-app-token';
@@ -110,6 +113,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     void restoreSession();
+  }, [persistSession]);
+
+  useEffect(() => {
+    return registerSessionExpiredHandler(async () => {
+      // Token is already rejected by the API — clear local session only.
+      clearPreferredApiBase();
+      clearSessionBootstrap();
+      await persistSession(null);
+      router.replace('/login');
+    });
   }, [persistSession]);
 
   const signIn = useCallback(

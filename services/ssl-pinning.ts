@@ -43,7 +43,7 @@ const API_PINNING_OPTIONS = {
       'Wec45nQiFwKvHtuHxSAMGkt19k+uPSw9JlEkxhvYPHk=',
     ],
   },
-} as const;
+};
 
 /**
  * Enable iOS SSL public-key pinning as early as possible.

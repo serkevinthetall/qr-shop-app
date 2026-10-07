@@ -1,4 +1,5 @@
 import { apiRequest } from '@/services/api-client';
+import { getApiFallbackMessage } from '@/services/network-error';
 
 type ApiErrorResponse = {
   success: false;
@@ -110,6 +111,8 @@ export async function changePasswordApi(
       method: 'POST',
       token,
       body: { current_password: currentPassword, new_password: newPassword },
+      // Wrong current password must not force logout (legacy APIs used 401).
+      skipSessionExpireOn401: true,
     },
   );
 
@@ -117,7 +120,7 @@ export async function changePasswordApi(
     throw new Error(
       data && 'message' in data && data.message
         ? data.message
-        : 'Failed to change password.',
+        : getApiFallbackMessage('changePasswordFailed'),
     );
   }
 

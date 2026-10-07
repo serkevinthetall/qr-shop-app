@@ -28,7 +28,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://www.qrshop.online",
-        "EXPO_PUBLIC_API_FALLBACK_URL": "https://qrshopmyanmar.netlify.app",
+        "EXPO_PUBLIC_API_FALLBACK_URL": "https://qr-shop-app-backend.vercel.app",
         "ORG_GRADLE_JVMARGS": "-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8"
       }
     },
@@ -41,7 +41,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://www.qrshop.online",
-        "EXPO_PUBLIC_API_FALLBACK_URL": "https://qrshopmyanmar.netlify.app",
+        "EXPO_PUBLIC_API_FALLBACK_URL": "https://qr-shop-app-backend.vercel.app",
         "ORG_GRADLE_JVMARGS": "-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8"
       }
     },
@@ -55,7 +55,7 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://www.qrshop.online",
-        "EXPO_PUBLIC_API_FALLBACK_URL": "https://qrshopmyanmar.netlify.app"
+        "EXPO_PUBLIC_API_FALLBACK_URL": "https://qr-shop-app-backend.vercel.app"
       }
     }
   },

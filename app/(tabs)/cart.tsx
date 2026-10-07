@@ -2,19 +2,25 @@ import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { Button } from 'react-native-paper';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CartLineItem } from '@/components/products/product-card';
+import { LiquidSurface } from '@/components/liquid-surface';
 import { useCart } from '@/contexts/cart-context';
 import { useLanguage } from '@/contexts/language-context';
+import { useLiquidTabBarScrollProps } from '@/contexts/liquid-tab-bar-visibility';
 import { useAppColors } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import { formatPrice } from '@/types/product';
+import { withHapticPress } from '@/utils/haptics';
+import { liquidTabBarClearance } from '@/utils/liquid-ui';
 
 export default function CartScreen() {
   const router = useRouter();
   const colors = useAppColors();
+  const insets = useSafeAreaInsets();
   const { rs, horizontalPadding, contentMaxWidth } = useResponsive();
+  const tabBarScrollProps = useLiquidTabBarScrollProps();
   const {
     productItems,
     totalAmount,
@@ -26,6 +32,7 @@ export default function CartScreen() {
     syncDeliveryFee,
   } = useCart();
   const { t, fs, lh } = useLanguage();
+  const footerExtraBottom = liquidTabBarClearance(insets.bottom);
 
   useFocusEffect(
     useCallback(() => {
@@ -69,6 +76,7 @@ export default function CartScreen() {
           style={{ backgroundColor: colors.background }}
           showsVerticalScrollIndicator={false}
           showsHorizontalScrollIndicator={false}
+          {...tabBarScrollProps}
           renderItem={({ item }) => (
             <CartLineItem
               product={item.product}
@@ -80,14 +88,17 @@ export default function CartScreen() {
         />
       </View>
 
-      <View
+      <LiquidSurface
         style={[
           styles.footer,
           {
-            backgroundColor: colors.surface,
             paddingHorizontal: horizontalPadding,
+            // Keep checkout above the floating liquid pill when that bar is on.
+            paddingBottom: 16 + footerExtraBottom,
           },
-        ]}>
+        ]}
+        backgroundColor={colors.surface}
+        glassStyle="regular">
         <View style={[styles.footerInner, { maxWidth: contentMaxWidth, alignSelf: 'center', width: '100%' }]}>
           <View style={styles.handle}>
             <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
@@ -125,14 +136,14 @@ export default function CartScreen() {
           <Button
             mode="contained"
             icon="arrow-right"
-            onPress={() => router.push('/checkout' as Href)}
+            onPress={withHapticPress(() => router.push('/checkout' as Href), 'medium')}
             style={styles.checkoutButtonWrap}
             contentStyle={styles.checkoutButton}
             labelStyle={{ fontSize: fs(rs(15)), lineHeight: lh(15), fontWeight: '700' }}>
             {t('cart.proceedToCheckout')}
           </Button>
         </View>
-      </View>
+      </LiquidSurface>
     </SafeAreaView>
   );
 }

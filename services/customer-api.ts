@@ -1,4 +1,6 @@
 import { apiRequest } from '@/services/api-client';
+import { throwIfUnauthorized } from '@/services/auth-error';
+import { getApiFallbackMessage } from '@/services/network-error';
 
 type ApiErrorResponse = {
   success: false;
@@ -46,8 +48,9 @@ export async function fetchCustomerProfile(token: string): Promise<CustomerProfi
     { token },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, 'Failed to load profile.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('loadProfile')));
   }
 
   if (!data.profile) {

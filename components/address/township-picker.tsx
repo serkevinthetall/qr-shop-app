@@ -14,9 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { Township } from '@/constants/townships';
 import { searchTownships } from '@/constants/townships';
-import { searchbarInputStyle } from '@/constants/text-input';
+import { inputCaretProps, searchbarInputStyleFor } from '@/constants/text-input';
 import { useLanguage } from '@/contexts/language-context';
-import { useAppColors } from '@/contexts/theme-context';
+import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 
 type TownshipPickerProps = {
@@ -37,8 +37,9 @@ export function TownshipPicker({
   error,
 }: TownshipPickerProps) {
   const colors = useAppColors();
+  const { isDark } = useThemeMode();
   const { rs } = useResponsive();
-  const { t, fs, lh } = useLanguage();
+  const { t, fs, lh, language } = useLanguage();
   const resolvedLabel = label ?? t('township.label');
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -112,8 +113,9 @@ export function TownshipPicker({
               value={searchQuery}
               onChangeText={setSearchQuery}
               style={[styles.searchbar, { backgroundColor: colors.inputBg }]}
-              inputStyle={searchbarInputStyle}
+              inputStyle={searchbarInputStyleFor(language)}
               autoFocus
+              {...inputCaretProps(isDark)}
             />
 
             <FlatList

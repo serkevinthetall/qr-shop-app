@@ -1,24 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MYANMAR_FONTS } from '@/constants/fonts';
 import { useLanguage } from '@/contexts/language-context';
+import { liquidTabBarClearance } from '@/utils/liquid-ui';
 
 type AppToastProps = {
   message: string;
   visible: boolean;
   onDismiss: () => void;
   duration?: number;
-  /**
-   * Extra gap above the calculated bottom anchor (tab bar or safe area).
-   * Default 8.
-   */
   bottomOffset?: number;
 };
 
 type AppToastInnerProps = AppToastProps & {
-  /** Absolute bottom distance from the bottom of the window/parent. */
   bottom: number;
 };
 
@@ -32,16 +28,25 @@ function AppToastInner({
   const { language } = useLanguage();
   const isMyanmar = language === 'my';
   const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(10)).current;
+  const scale = useRef(new Animated.Value(0.96)).current;
   const [mounted, setMounted] = useState(false);
   const [shownMessage, setShownMessage] = useState(message);
 
   useEffect(() => {
     if (!visible || !message) {
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 160,
-        useNativeDriver: true,
-      }).start(({ finished }) => {
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 140,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 8,
+          duration: 140,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
         if (finished) {
           setMounted(false);
         }
@@ -52,11 +57,29 @@ function AppToastInner({
     setShownMessage(message);
     setMounted(true);
     opacity.setValue(0);
-    Animated.timing(opacity, {
-      toValue: 1,
-      duration: 160,
-      useNativeDriver: true,
-    }).start();
+    translateY.setValue(12);
+    scale.setValue(0.96);
+
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        friction: 7,
+        tension: 140,
+        useNativeDriver: true,
+      }),
+    ]).start();
 
     const timer = setTimeout(() => {
       onDismiss();
@@ -64,7 +87,7 @@ function AppToastInner({
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, message, duration, opacity]);
+  }, [visible, message, duration, opacity, translateY, scale]);
 
   if (!mounted || !shownMessage) {
     return null;
@@ -78,6 +101,7 @@ function AppToastInner({
         {
           opacity,
           bottom,
+          transform: [{ translateY }, { scale }],
         },
       ]}>
       <View style={[styles.toast, isMyanmar && styles.toastMyanmar]}>
@@ -94,7 +118,6 @@ function AppToastInner({
   );
 }
 
-/** Toast for screens outside the tab bar (product detail, etc.). */
 export function AppToast({ bottomOffset = 8, ...props }: AppToastProps) {
   const insets = useSafeAreaInsets();
   return (
@@ -102,13 +125,13 @@ export function AppToast({ bottomOffset = 8, ...props }: AppToastProps) {
   );
 }
 
-/**
- * Toast for tab screens.
- * Tab content is already laid out above the tab bar, so only a small gap is needed.
- * Adding `useBottomTabBarHeight()` here double-counts and makes the toast "fly".
- */
-export function TabAppToast({ bottomOffset = 10, ...props }: AppToastProps) {
-  return <AppToastInner {...props} bottom={bottomOffset} />;
+export function TabAppToast({ bottomOffset = 12, ...props }: AppToastProps) {
+  const insets = useSafeAreaInsets();
+  const clearance = liquidTabBarClearance(insets.bottom);
+  const bottom =
+    (clearance > 0 ? clearance : Math.max(insets.bottom, 8)) + bottomOffset;
+
+  return <AppToastInner {...props} bottom={bottom} />;
 }
 
 const styles = StyleSheet.create({
@@ -122,10 +145,10 @@ const styles = StyleSheet.create({
   },
   toast: {
     backgroundColor: '#323232',
-    borderRadius: 10,
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    overflow: 'visible',
+    overflow: 'hidden',
   },
   toastMyanmar: {
     paddingTop: 20,
@@ -139,7 +162,6 @@ const styles = StyleSheet.create({
   },
   textMyanmar: {
     fontSize: 15,
-    // Natural metrics + padding (fixed lineHeight still clips Burmese marks).
     ...(Platform.OS === 'android'
       ? {
           includeFontPadding: true,

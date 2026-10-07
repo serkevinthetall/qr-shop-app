@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { UpgradePlan } from '@/components/membership-upgrade-modal';
 import { apiRequest } from '@/services/api-client';
+import { throwIfUnauthorized } from '@/services/auth-error';
+import { getApiFallbackMessage } from '@/services/network-error';
 
 const UPGRADE_PENDING_KEY = 'qr-app-membership-upgrade-pending';
 
@@ -106,8 +108,9 @@ export async function fetchMembershipApplication(token: string) {
     { token },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, 'Failed to load membership application.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('loadMembership')));
   }
 
   return data.application;
@@ -137,8 +140,9 @@ export async function submitMembershipUpgradeRequest(input: {
     },
   );
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, 'Failed to submit membership application.'));
+    throw new Error(getApiError(data, getApiFallbackMessage('upgradeFailed')));
   }
 }
 

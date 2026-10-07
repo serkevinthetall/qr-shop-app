@@ -1,5 +1,7 @@
 import { apiRequest } from '@/services/api-client';
+import { throwIfUnauthorized } from '@/services/auth-error';
 import type { Product } from '@/types/product';
+import { getApiFallbackMessage } from '@/services/network-error';
 
 const DELIVERY_FEE_TAG = '__delivery_fee__';
 
@@ -68,11 +70,12 @@ export async function fetchDeliveryFeeQuote(
     token,
   });
 
+  throwIfUnauthorized(response);
   if (!response.ok || !data || !data.success) {
     throw new Error(
       data && 'message' in data && data.message
         ? data.message
-        : 'Failed to load delivery fee.',
+        : getApiFallbackMessage('loadDeliveryFee'),
     );
   }
 

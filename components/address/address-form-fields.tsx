@@ -4,9 +4,9 @@ import { Button, HelperText, TextInput } from 'react-native-paper';
 import { TownshipPicker } from '@/components/address/township-picker';
 import type { Township } from '@/constants/townships';
 import { findTownshipByCity } from '@/constants/townships';
-import { textInputContentStyle, paperTextInputContentStyle } from '@/constants/text-input';
+import { textInputContentStyle, paperTextInputContentStyle, inputCaretProps } from '@/constants/text-input';
 import { useLanguage } from '@/contexts/language-context';
-import { useAppColors } from '@/contexts/theme-context';
+import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import type { Address } from '@/types/address';
 export type AddressFormValues = {
@@ -50,6 +50,7 @@ export function AddressFormFields({
 }: AddressFormFieldsProps) {
   const { t, fs, lh, language } = useLanguage();
   const colors = useAppColors();
+  const { isDark } = useThemeMode();
   const { rs } = useResponsive();
   const update = (patch: Partial<AddressFormValues>) => {
     onChange({ ...values, ...patch });
@@ -74,6 +75,7 @@ export function AddressFormFields({
           placeholder={t('addressForm.labelPlaceholder')}
           style={styles.input}
           contentStyle={inputContentStyle}
+          {...inputCaretProps(isDark)}
         />
       </View>
       <View style={styles.field}>
@@ -87,6 +89,7 @@ export function AddressFormFields({
           error={!!phoneError}
           style={styles.input}
           contentStyle={inputContentStyle}
+          {...inputCaretProps(isDark)}
         />
         {phoneError ? <HelperText type="error">{phoneError}</HelperText> : null}
       </View>
@@ -99,6 +102,7 @@ export function AddressFormFields({
           dense
           style={styles.input}
           contentStyle={inputContentStyle}
+          {...inputCaretProps(isDark)}
         />
       </View>
       <View style={styles.field}>
@@ -110,6 +114,7 @@ export function AddressFormFields({
           dense
           style={styles.input}
           contentStyle={inputContentStyle}
+          {...inputCaretProps(isDark)}
         />
       </View>
 

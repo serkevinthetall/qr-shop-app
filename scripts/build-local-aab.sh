@@ -6,7 +6,6 @@ export JAVA_HOME="${JAVA_HOME:-/Applications/Android Studio.app/Contents/jbr/Con
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 export PATH="$JAVA_HOME/bin:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:$PATH"
 export EXPO_PUBLIC_API_BASE_URL="${EXPO_PUBLIC_API_BASE_URL:-https://www.qrshop.online}"
-export EXPO_PUBLIC_API_FALLBACK_URL="${EXPO_PUBLIC_API_FALLBACK_URL:-https://qrshopmyanmar.netlify.app}"
 export ORG_GRADLE_JVMARGS="${ORG_GRADLE_JVMARGS:--Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8}"
 
 if [[ ! -x "$JAVA_HOME/bin/java" ]]; then

@@ -14,21 +14,27 @@ import {
 import { Menu, Searchbar } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { InlineErrorBanner } from '@/components/inline-error-banner';
 import { OrdersListSkeleton } from '@/components/orders/order-card-skeleton';
 import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
-import { useAppColors } from '@/contexts/theme-context';
+import { useLiquidTabBarScrollProps } from '@/contexts/liquid-tab-bar-visibility';
+import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { takeOrdersBootstrap } from '@/services/catalog-bootstrap';
-import { searchbarInputStyle } from '@/constants/text-input';
+import { getUserFacingError } from '@/services/auth-error';
+import { inputCaretProps, searchbarInputStyleFor } from '@/constants/text-input';
 import {
+  fetchOrderById,
   fetchOrders,
-  getDeliveryProgressLabel,
+  getDeliveryStatusHint,
   getOrderDeliveryStatus,
+  getOrderShippingLabel,
+  getStatusLabel,
   type DeliveryStatus,
   type Order,
 } from '@/services/order-api';
 import { formatPrice } from '@/types/product';
-
+import { formatMyanmarDateTime, parseOdooUtcDate } from '@/utils/datetime';
 type AppColors = ReturnType<typeof useAppColors>;
 type Language = ReturnType<typeof useLanguage>;
 
@@ -44,7 +50,7 @@ const STATUS_FILTERS: { key: StatusFilter; labelKey: string }[] = [
 
 const STATUS_GROUPS: Record<Exclude<StatusFilter, 'all'>, DeliveryStatus[]> = {
   pending: ['pending'],
-  in_progress: ['preparing', 'out_for_delivery', 'partial', 'delivered'],
+  in_progress: ['preparing', 'partial', 'delivered'],
   completed: ['completed'],
   cancelled: ['cancelled'],
 };
@@ -59,6 +65,7 @@ const DATE_FILTERS: { key: DateFilter; labelKey: string }[] = [
   { key: 'year', labelKey: 'orders.filterYear' },
 ];
 
+// Start (epoch ms, device local time) of the selected range, or null for "all".
 function getDateThreshold(filter: DateFilter): number | null {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -81,163 +88,24 @@ function getDateThreshold(filter: DateFilter): number | null {
   }
 }
 
-/** Odoo returns `YYYY-MM-DD HH:mm:ss` — normalize so RN Date parsing is reliable. */
-function parseOrderDate(value: string | undefined | null): Date | null {
-  if (!value) return null;
-  const raw = String(value).trim();
-  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
-  const date = new Date(normalized);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
+const MAX_AVATARS = 2;
+const CARD_GAP = 40;
 
-function pad2(n: number) {
-  return String(n).padStart(2, '0');
-}
-
-function monthKey(date: Date) {
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`;
-}
-
-function dayKey(date: Date) {
-  return `${monthKey(date)}-${pad2(date.getDate())}`;
-}
-
-function formatMonthLabel(date: Date, locale: string) {
-  return date.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
-}
-
-function formatDayLabel(date: Date, locale: string) {
-  return date.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-function formatCreationDate(date: Date, locale: string) {
-  return date.toLocaleString(locale, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-/** Odoo-style document type on the list row. */
-function getDocumentTypeLabel(state: string, t: Language['t']) {
-  switch (state) {
-    case 'draft':
-    case 'sent':
-      return t('orders.documentQuotation');
-    case 'sale':
-      return t('orders.documentSalesOrder');
-    case 'done':
-      return t('orders.documentDone');
-    case 'cancel':
-      return t('orders.documentCancelled');
-    default:
-      return state;
-  }
-}
-
-function getDocumentBadgeColors(state: string, colors: AppColors) {
-  switch (state) {
-    case 'sale':
-    case 'done':
+function getStatusBadgeColors(status: DeliveryStatus, colors: AppColors) {
+  switch (status) {
+    case 'completed':
+    case 'delivered':
       return { bg: colors.successBg, text: colors.success, border: colors.success };
-    case 'cancel':
+    case 'cancelled':
       return { bg: colors.dangerBg, text: colors.danger, border: colors.danger };
-    case 'draft':
-    case 'sent':
-    default:
+    case 'partial':
       return { bg: colors.primaryMuted, text: colors.primary, border: colors.primary };
+    case 'preparing':
+      return { bg: colors.primaryMuted, text: colors.primary, border: colors.primary };
+    case 'pending':
+    default:
+      return { bg: colors.inputBg, text: colors.textMuted, border: colors.border };
   }
-}
-
-type MonthHeaderItem = {
-  kind: 'month';
-  id: string;
-  label: string;
-  count: number;
-  total: number;
-};
-
-type DayHeaderItem = {
-  kind: 'day';
-  id: string;
-  label: string;
-  count: number;
-  total: number;
-};
-
-type OrderRowItem = {
-  kind: 'order';
-  id: string;
-  order: Order;
-};
-
-type ListItem = MonthHeaderItem | DayHeaderItem | OrderRowItem;
-
-function buildGroupedList(orders: Order[], locale: string): ListItem[] {
-  const sorted = [...orders].sort((a, b) => {
-    const aTime = parseOrderDate(a.date_order)?.getTime() ?? 0;
-    const bTime = parseOrderDate(b.date_order)?.getTime() ?? 0;
-    return bTime - aTime;
-  });
-
-  const items: ListItem[] = [];
-  let currentMonth = '';
-  let currentDay = '';
-
-  const monthBuckets = new Map<string, Order[]>();
-  const dayBuckets = new Map<string, Order[]>();
-
-  for (const order of sorted) {
-    const date = parseOrderDate(order.date_order) ?? new Date(0);
-    const mKey = monthKey(date);
-    const dKey = dayKey(date);
-
-    if (!monthBuckets.has(mKey)) monthBuckets.set(mKey, []);
-    monthBuckets.get(mKey)!.push(order);
-
-    if (!dayBuckets.has(dKey)) dayBuckets.set(dKey, []);
-    dayBuckets.get(dKey)!.push(order);
-  }
-
-  for (const order of sorted) {
-    const date = parseOrderDate(order.date_order) ?? new Date(0);
-    const mKey = monthKey(date);
-    const dKey = dayKey(date);
-
-    if (mKey !== currentMonth) {
-      currentMonth = mKey;
-      currentDay = '';
-      const monthOrders = monthBuckets.get(mKey) || [];
-      items.push({
-        kind: 'month',
-        id: `month-${mKey}`,
-        label: formatMonthLabel(date, locale),
-        count: monthOrders.length,
-        total: monthOrders.reduce((sum, item) => sum + (Number(item.amount_total) || 0), 0),
-      });
-    }
-
-    if (dKey !== currentDay) {
-      currentDay = dKey;
-      const dayOrders = dayBuckets.get(dKey) || [];
-      items.push({
-        kind: 'day',
-        id: `day-${dKey}`,
-        label: formatDayLabel(date, locale),
-        count: dayOrders.length,
-        total: dayOrders.reduce((sum, item) => sum + (Number(item.amount_total) || 0), 0),
-      });
-    }
-
-    items.push({
-      kind: 'order',
-      id: `order-${order.id}`,
-      order,
-    });
-  }
-
-  return items;
 }
 
 function StatusChips({
@@ -282,158 +150,154 @@ function StatusChips({
   );
 }
 
-function MonthHeader({
-  item,
-  colors,
-  lang,
-}: {
-  item: MonthHeaderItem;
-  colors: AppColors;
-  lang: Language;
-}) {
+function ItemAvatars({ count, cardBg, colors }: { count: number; cardBg: string; colors: AppColors }) {
+  const palette = [colors.primary, colors.textMuted, colors.success];
+  const visible = Math.min(count, MAX_AVATARS);
+  const overflow = count - visible;
+
   return (
-    <View style={[styles.monthHeader, { borderBottomColor: colors.border }]}>
-      <Text style={[styles.monthLabel, { color: colors.text, fontSize: lang.fs(16), lineHeight: lang.lh(16) }]}>
-        {item.label}
-      </Text>
-      <View style={styles.groupMeta}>
-        <Text style={[styles.groupCount, { color: colors.textMuted, fontSize: lang.fs(13) }]}>{item.count}</Text>
-        <Text style={[styles.groupTotal, { color: colors.text, fontSize: lang.fs(14), lineHeight: lang.lh(14) }]}>
-          {formatPrice(item.total)}
-        </Text>
-      </View>
+    <View style={styles.avatarStack}>
+      {Array.from({ length: visible }).map((_, index) => (
+        <View
+          key={index}
+          style={[
+            styles.avatar,
+            {
+              backgroundColor: palette[index % palette.length],
+              borderColor: cardBg,
+              marginLeft: index === 0 ? 0 : -8,
+            },
+          ]}
+        />
+      ))}
+      {overflow > 0 ? (
+        <View
+          style={[
+            styles.avatar,
+            styles.avatarMore,
+            { backgroundColor: colors.border, borderColor: cardBg, marginLeft: visible === 0 ? 0 : -8 },
+          ]}>
+          <Text style={[styles.avatarMoreText, { color: colors.textMuted }]}>+{overflow}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
 
-function DayHeader({
-  item,
-  colors,
-  lang,
-}: {
-  item: DayHeaderItem;
-  colors: AppColors;
-  lang: Language;
-}) {
-  return (
-    <View style={[styles.dayHeader, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-      <Text style={[styles.dayLabel, { color: colors.text, fontSize: lang.fs(13), lineHeight: lang.lh(13) }]}>
-        {item.label}
-      </Text>
-      <View style={styles.groupMeta}>
-        <Text style={[styles.groupCount, { color: colors.textMuted, fontSize: lang.fs(12) }]}>
-          {lang.t('orders.groupCount', { count: item.count })}
-        </Text>
-        <Text style={[styles.groupTotal, { color: colors.textMuted, fontSize: lang.fs(13), lineHeight: lang.lh(13) }]}>
-          {formatPrice(item.total)}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-function OrderRow({
+function OrderCard({
   order,
+  itemCount,
   colors,
   lang,
   onPress,
 }: {
   order: Order;
+  itemCount: number | undefined;
   colors: AppColors;
   lang: Language;
   onPress: () => void;
 }) {
-  const locale = lang.language === 'my' ? 'my-MM' : 'en-US';
-  const date = parseOrderDate(order.date_order);
-  const badge = getDocumentBadgeColors(order.state, colors);
+  // Visible tinted card — clearly colored, not invisible grey on white.
+  const cardBg = colors.primaryMuted;
+  const itemsLabel =
+    itemCount === undefined
+      ? '—'
+      : itemCount === 1
+        ? lang.t('orders.itemCountOne')
+        : lang.t('orders.itemsCount', { count: itemCount });
   const deliveryStatus = getOrderDeliveryStatus(order);
-  const partialProgress = getDeliveryProgressLabel(order, lang.t);
-  const products = Array.isArray(order.product_preview) ? order.product_preview : [];
-  const extraCount = Math.max(0, (order.product_preview_count || products.length) - products.length);
+  const statusBadge = getStatusBadgeColors(deliveryStatus, colors);
+  const shippingLabel = getOrderShippingLabel(order);
+  const shippingPreview = shippingLabel.split('\n').filter(Boolean).slice(0, 2).join(' · ');
+  const statusHint = getDeliveryStatusHint(order, lang.t);
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
-        styles.orderRow,
+        styles.card,
         {
-          backgroundColor: colors.card,
-          borderBottomColor: colors.border,
+          backgroundColor: cardBg,
+          borderColor: colors.primary,
           opacity: pressed ? 0.88 : 1,
         },
       ]}>
-      <View style={styles.orderMain}>
-        <View style={styles.orderTop}>
+      {/* Row 1 — date + status badge left, sale order number right */}
+      <View style={styles.row}>
+        <View style={styles.dateWrap}>
+          <MaterialCommunityIcons name="calendar-blank-outline" size={14} color={colors.textMuted} />
           <Text
             numberOfLines={1}
-            style={[styles.orderNo, { color: colors.text, fontSize: lang.fs(15), lineHeight: lang.lh(15) }]}>
-            {order.name}
+            style={[styles.dateText, { color: colors.textMuted, fontSize: lang.fs(13), lineHeight: lang.lh(13) }]}>
+            {formatMyanmarDateTime(order.date_order)}
           </Text>
+          <View
+            style={[
+              styles.statusBadge,
+              {
+                backgroundColor: statusBadge.bg,
+                borderColor: statusBadge.border,
+              },
+            ]}>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.statusBadgeText,
+                { color: statusBadge.text, fontSize: lang.fs(11), lineHeight: lang.lh(11) },
+              ]}>
+              {getStatusLabel(order.state, lang.t, deliveryStatus)}
+            </Text>
+          </View>
+        </View>
+        <Text
+          numberOfLines={1}
+          style={[styles.orderNo, { color: colors.text, fontSize: lang.fs(16), lineHeight: lang.lh(16) }]}>
+          {order.name}
+        </Text>
+      </View>
+
+      {shippingPreview ? (
+        <View style={[styles.row, styles.addressRow]}>
+          <MaterialCommunityIcons name="map-marker-outline" size={14} color={colors.textMuted} />
           <Text
-            numberOfLines={1}
-            style={[styles.orderTotal, { color: colors.text, fontSize: lang.fs(15), lineHeight: lang.lh(15) }]}>
-            {formatPrice(order.amount_total)}
+            numberOfLines={2}
+            style={[styles.addressText, { color: colors.textMuted, fontSize: lang.fs(12), lineHeight: lang.lh(12) }]}>
+            {shippingPreview}
+          </Text>
+        </View>
+      ) : null}
+
+      {statusHint ? (
+        <Text
+          numberOfLines={2}
+          style={[styles.statusHint, { color: colors.primary, fontSize: lang.fs(12), lineHeight: lang.lh(12) }]}>
+          {statusHint}
+        </Text>
+      ) : null}
+
+      {/* Row 2 — items left, price + view details stacked on the right */}
+      <View style={[styles.row, styles.rowGap]}>
+        <View style={styles.itemsWrap}>
+          {itemCount !== undefined && itemCount > 0 ? (
+            <ItemAvatars count={itemCount} cardBg={cardBg} colors={colors} />
+          ) : null}
+          <Text style={[styles.itemsText, { color: colors.textMuted, fontSize: lang.fs(13), lineHeight: lang.lh(13) }]}>
+            {itemsLabel}
           </Text>
         </View>
 
-        <Text
-          numberOfLines={1}
-          style={[styles.creationDate, { color: colors.textMuted, fontSize: lang.fs(12), lineHeight: lang.lh(12) }]}>
-          {date ? formatCreationDate(date, locale) : '—'}
-        </Text>
-
-        {products.length > 0 ? (
-          <View style={styles.productList}>
-            {products.map((product) => (
-              <View key={`${order.id}-${product.id}`} style={styles.productRow}>
-                <Text
-                  numberOfLines={1}
-                  style={[styles.productName, { color: colors.text, fontSize: lang.fs(13), lineHeight: lang.lh(13) }]}>
-                  {product.name}
-                </Text>
-                <Text
-                  style={[styles.productQty, { color: colors.textMuted, fontSize: lang.fs(13), lineHeight: lang.lh(13) }]}>
-                  {product.qty}
-                </Text>
-              </View>
-            ))}
-            {extraCount > 0 ? (
-              <Text style={[styles.productMore, { color: colors.textMuted, fontSize: lang.fs(12) }]}>
-                +{extraCount}
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
-
-        {partialProgress ? (
-          <Text
-            numberOfLines={1}
-            style={[styles.partialProgress, { color: colors.primary, fontSize: lang.fs(11), lineHeight: lang.lh(11) }]}>
-            {partialProgress}
+        <View style={styles.rightCol}>
+          <Text style={[styles.price, { color: colors.text, fontSize: lang.fs(18), lineHeight: lang.lh(18) }]}>
+            {formatPrice(order.amount_total)}
           </Text>
-        ) : null}
+          <View style={styles.viewDetails}>
+            <Text style={[styles.viewDetailsText, { color: colors.primary, fontSize: lang.fs(13), lineHeight: lang.lh(13) }]}>
+              {lang.t('orders.viewDetails')}
+            </Text>
+            <MaterialCommunityIcons name="chevron-right" size={14} color={colors.primary} />
+          </View>
+        </View>
       </View>
-
-      <View
-        style={[
-          styles.statusBadge,
-          {
-            backgroundColor: badge.bg,
-            borderColor: badge.border,
-          },
-        ]}>
-        <Text
-          numberOfLines={1}
-          style={[styles.statusBadgeText, { color: badge.text, fontSize: lang.fs(11), lineHeight: lang.lh(11) }]}>
-          {getDocumentTypeLabel(order.state, lang.t)}
-        </Text>
-      </View>
-
-      {deliveryStatus === 'partial' || deliveryStatus === 'preparing' || deliveryStatus === 'delivered' ? (
-        <MaterialCommunityIcons name="truck-delivery-outline" size={16} color={colors.textMuted} />
-      ) : (
-        <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textMuted} />
-      )}
     </Pressable>
   );
 }
@@ -441,12 +305,14 @@ function OrderRow({
 export default function OrdersScreen() {
   const router = useRouter();
   const colors = useAppColors();
+  const { isDark } = useThemeMode();
   const lang = useLanguage();
   const { token } = useAuth();
-  const locale = lang.language === 'my' ? 'my-MM' : 'en-US';
+  const tabBarScrollProps = useLiquidTabBarScrollProps();
 
   const [ordersSeed] = useState(() => takeOrdersBootstrap());
   const [orders, setOrders] = useState<Order[]>(ordersSeed ?? []);
+  const [itemCounts, setItemCounts] = useState<Record<number, number>>({});
   const [isLoading, setIsLoading] = useState(!ordersSeed);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -455,24 +321,46 @@ export default function OrdersScreen() {
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [dateMenuVisible, setDateMenuVisible] = useState(false);
 
+  const enrichItemCounts = useCallback((list: Order[], authToken: string) => {
+    list.forEach(async (order) => {
+      try {
+        const detail = await fetchOrderById(authToken, order.id);
+        setItemCounts((prev) => ({ ...prev, [order.id]: detail.lines.length }));
+      } catch {
+        // Keep showing "—" for this order.
+      }
+    });
+  }, []);
+
   const loadOrders = useCallback(async () => {
     if (!token) return;
     const list = await fetchOrders(token);
     setOrders(list);
-  }, [token]);
+    setItemCounts({});
+    enrichItemCounts(list, token);
+  }, [token, enrichItemCounts]);
 
   useEffect(() => {
-    loadOrders()
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load orders.'))
-      .finally(() => setIsLoading(false));
-  }, [loadOrders]);
+    if (ordersSeed && token) {
+      enrichItemCounts(ordersSeed, token);
+    }
 
+    loadOrders()
+      .catch((err) => {
+        const message = getUserFacingError(err, lang.t('errors.loadOrders'), lang.t);
+        if (message) setError(message);
+      })
+      .finally(() => setIsLoading(false));
+  }, [loadOrders, ordersSeed, token, enrichItemCounts, lang.t]);
+
+  // Re-fetch when the Orders tab regains focus (e.g. after checkout).
   useFocusEffect(
     useCallback(() => {
       loadOrders().catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load orders.');
+        const message = getUserFacingError(err, lang.t('errors.loadOrders'), lang.t);
+        if (message) setError(message);
       });
-    }, [loadOrders]),
+    }, [loadOrders, lang.t]),
   );
 
   useEffect(() => {
@@ -493,7 +381,8 @@ export default function OrdersScreen() {
     try {
       await loadOrders();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to refresh orders.');
+      const message = getUserFacingError(err, lang.t('errors.refreshOrders'), lang.t);
+      if (message) setError(message);
     } finally {
       setIsRefreshing(false);
     }
@@ -503,25 +392,15 @@ export default function OrdersScreen() {
     const query = search.trim().toLowerCase();
     const threshold = getDateThreshold(dateFilter);
     return orders.filter((order) => {
-      if (query) {
-        const inName = order.name.toLowerCase().includes(query);
-        const inProducts = (order.product_preview || []).some((product) =>
-          String(product.name || '')
-            .toLowerCase()
-            .includes(query),
-        );
-        if (!inName && !inProducts) return false;
-      }
+      if (query && !order.name.toLowerCase().includes(query)) return false;
       if (statusFilter !== 'all' && !STATUS_GROUPS[statusFilter].includes(getOrderDeliveryStatus(order))) return false;
       if (threshold !== null) {
-        const time = parseOrderDate(order.date_order)?.getTime();
-        if (time == null || time < threshold) return false;
+        const orderMs = parseOdooUtcDate(order.date_order)?.getTime();
+        if (orderMs == null || orderMs < threshold) return false;
       }
       return true;
     });
   }, [orders, search, statusFilter, dateFilter]);
-
-  const listItems = useMemo(() => buildGroupedList(filteredOrders, locale), [filteredOrders, locale]);
 
   if (isLoading) {
     return (
@@ -532,11 +411,16 @@ export default function OrdersScreen() {
             editable={false}
             placeholder={lang.t('orders.searchPlaceholder')}
             style={[styles.searchbar, styles.searchbarFlex, { backgroundColor: colors.inputBg }]}
-            inputStyle={searchbarInputStyle}
+            inputStyle={searchbarInputStyleFor(lang.language)}
             placeholderTextColor={colors.textMuted}
             iconColor={colors.textMuted}
+            {...inputCaretProps(isDark)}
           />
-          <View style={[styles.dateButton, { backgroundColor: 'transparent', borderColor: 'transparent' }]}>
+          <View
+            style={[
+              styles.dateButton,
+              { backgroundColor: 'transparent', borderColor: 'transparent' },
+            ]}>
             <MaterialCommunityIcons name="calendar-range" size={20} color={colors.primary} />
             <MaterialCommunityIcons name="chevron-down" size={14} color={colors.textMuted} />
           </View>
@@ -557,9 +441,10 @@ export default function OrdersScreen() {
           onChangeText={setSearch}
           placeholder={lang.t('orders.searchPlaceholder')}
           style={[styles.searchbar, styles.searchbarFlex, { backgroundColor: colors.inputBg }]}
-          inputStyle={searchbarInputStyle}
+          inputStyle={searchbarInputStyleFor(lang.language)}
           placeholderTextColor={colors.textMuted}
           iconColor={colors.textMuted}
+          {...inputCaretProps(isDark)}
         />
         <Menu
           visible={dateMenuVisible}
@@ -600,16 +485,24 @@ export default function OrdersScreen() {
 
       <StatusChips active={statusFilter} onChange={setStatusFilter} colors={colors} lang={lang} />
 
-      {error ? <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text> : null}
+      {error ? (
+        <InlineErrorBanner
+          message={error}
+          onRetry={() => {
+            void handleRefresh();
+          }}
+          onDismiss={() => setError('')}
+          retrying={isRefreshing}
+        />
+      ) : null}
 
       <FlatList
-        data={listItems}
-        keyExtractor={(item) => item.id}
+        data={filteredOrders}
+        keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={listItems
-          .map((item, index) => (item.kind === 'month' ? index : -1))
-          .filter((index) => index >= 0)}
+        {...tabBarScrollProps}
+        ItemSeparatorComponent={() => <View style={{ height: CARD_GAP }} />}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
         }
@@ -621,28 +514,15 @@ export default function OrdersScreen() {
             </Text>
           </View>
         }
-        renderItem={({ item }) => {
-          if (item.kind === 'month') {
-            return (
-              <View style={{ backgroundColor: colors.background }}>
-                <MonthHeader item={item} colors={colors} lang={lang} />
-              </View>
-            );
-          }
-
-          if (item.kind === 'day') {
-            return <DayHeader item={item} colors={colors} lang={lang} />;
-          }
-
-          return (
-            <OrderRow
-              order={item.order}
-              colors={colors}
-              lang={lang}
-              onPress={() => router.push(`/order/${item.order.id}` as Href)}
-            />
-          );
-        }}
+        renderItem={({ item }) => (
+          <OrderCard
+            order={item}
+            itemCount={itemCounts[item.id]}
+            colors={colors}
+            lang={lang}
+            onPress={() => router.push(`/order/${item.id}` as Href)}
+          />
+        )}
       />
     </SafeAreaView>
   );
@@ -673,7 +553,7 @@ const styles = StyleSheet.create({
   dateButtonText: { fontWeight: '700', flexShrink: 1 },
   chipsScroll: {
     flexGrow: 0,
-    marginBottom: 12,
+    marginBottom: 16,
     minHeight: 48,
   },
   chipsContent: {
@@ -691,99 +571,81 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   chipText: { fontWeight: '700' },
-  listContent: { paddingBottom: 28 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 120 },
 
-  monthHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  // Each order = its own grey block, NOT one continuous list
+  card: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
-  monthLabel: { fontWeight: '800', flex: 1 },
-  dayHeader: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-    marginHorizontal: 16,
+    gap: 10,
+  },
+  rowGap: {
+    marginTop: 12,
+  },
+  addressRow: {
     marginTop: 10,
-    marginBottom: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'flex-start',
+    gap: 6,
   },
-  dayLabel: { fontWeight: '700', flex: 1 },
-  groupMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flexShrink: 0,
-  },
-  groupCount: { fontWeight: '600' },
-  groupTotal: { fontWeight: '800' },
-
-  orderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  orderMain: {
+  addressText: {
     flex: 1,
-    minWidth: 0,
-    gap: 4,
+    fontWeight: '500',
   },
-  orderTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  orderNo: { fontWeight: '800', flexShrink: 1 },
-  orderTotal: { fontWeight: '800', flexShrink: 0 },
-  creationDate: { fontWeight: '500' },
-  productList: {
-    marginTop: 6,
-    gap: 4,
-  },
-  productRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  productName: {
-    flex: 1,
-    minWidth: 0,
+  statusHint: {
+    marginTop: 8,
     fontWeight: '600',
   },
-  productQty: {
-    fontWeight: '700',
-    flexShrink: 0,
-    minWidth: 28,
-    textAlign: 'right',
+  dateWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    minWidth: 0,
   },
-  productMore: { fontWeight: '600' },
-  partialProgress: { fontWeight: '700', marginTop: 4 },
+  dateText: { fontWeight: '500', flexShrink: 1 },
   statusBadge: {
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    maxWidth: 110,
+    paddingVertical: 3,
     flexShrink: 0,
   },
   statusBadgeText: {
     fontWeight: '700',
   },
-
+  orderNo: { fontWeight: '800', flexShrink: 0 },
+  itemsWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+  },
+  itemsText: { fontWeight: '600' },
+  rightCol: {
+    alignItems: 'flex-end',
+    gap: 6,
+    flexShrink: 0,
+  },
+  viewDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 1,
+  },
+  viewDetailsText: { fontWeight: '700' },
+  price: { fontWeight: '800' },
+  avatarStack: { flexDirection: 'row', alignItems: 'center' },
+  avatar: { width: 24, height: 24, borderRadius: 12, borderWidth: 2 },
+  avatarMore: { alignItems: 'center', justifyContent: 'center' },
+  avatarMoreText: { fontWeight: '800', fontSize: 9 },
   emptyWrap: { alignItems: 'center', paddingVertical: 64, gap: 12 },
   emptyText: { fontSize: 16 },
   errorText: { marginBottom: 12, marginHorizontal: 16, textAlign: 'center' },

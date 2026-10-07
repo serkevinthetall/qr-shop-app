@@ -1,8 +1,11 @@
 import { useRouter, type Href } from 'expo-router';
 import { useCallback, useState } from 'react';
+import { Alert } from 'react-native';
 
 import { useAuth } from '@/contexts/auth-context';
 import { useCart } from '@/contexts/cart-context';
+import { useLanguage } from '@/contexts/language-context';
+import { getUserFacingError } from '@/services/auth-error';
 import { fetchOrderById, type OrderLine } from '@/services/order-api';
 import type { Product } from '@/types/product';
 
@@ -21,6 +24,7 @@ export function useReorder() {
   const router = useRouter();
   const { token } = useAuth();
   const { addToCart } = useCart();
+  const { t } = useLanguage();
   const [reorderingId, setReorderingId] = useState<number | null>(null);
 
   const reorder = useCallback(
@@ -39,11 +43,16 @@ export function useReorder() {
           .forEach((line) => addToCart(lineToProduct(line), line.product_uom_qty));
 
         router.push('/cart' as Href);
+      } catch (err) {
+        const message = getUserFacingError(err, t('errors.reorderFailed'));
+        if (message) {
+          Alert.alert(t('orders.reorder'), message);
+        }
       } finally {
         setReorderingId(null);
       }
     },
-    [token, reorderingId, addToCart, router],
+    [token, reorderingId, addToCart, router, t],
   );
 
   return { reorder, reorderingId };

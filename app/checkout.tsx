@@ -1,9 +1,9 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter, type Href } from 'expo-router';
 // Wire transfer / KPay — re-enable when payment screenshot flow is turned back on.
 // import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   findNodeHandle,
   Platform,
   Pressable,
@@ -22,15 +22,19 @@ import {
   type AddressCheckoutHandle,
 } from '@/components/checkout/address-section';
 import { DatePickerField } from '@/components/date-picker-field';
+import { CelebrationBurst } from '@/components/celebration-burst';
+import { DetailHeaderBar } from '@/components/detail-header-bar';
+import { InlineErrorBanner } from '@/components/inline-error-banner';
 import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
-
 // const KPAY_QR_IMAGE = require('@/assets/images/kpay-qr.png');
 import { MYANMAR_FONTS } from '@/constants/fonts';
+import { inputCaretProps } from '@/constants/text-input';
 import { useAuth } from '@/contexts/auth-context';
 import { useCart } from '@/contexts/cart-context';
 import { useLanguage } from '@/contexts/language-context';
-import { useAppColors } from '@/contexts/theme-context';
+import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
+import { getUserFacingError } from '@/services/auth-error';
 import { checkoutOrder } from '@/services/order-api';
 import { fetchMembership, fetchMembershipCoupons } from '@/services/membership-api';
 import {
@@ -42,6 +46,9 @@ import {
 } from '@/types/membership';
 import type { Membership, MembershipCoupon } from '@/types/membership';
 import { formatPrice } from '@/types/product';
+import { openStoreReviewPage, shouldAutoPromptStoreRating } from '@/services/store-review';
+import { hapticSuccess } from '@/utils/haptics';
+import { isLiquidUiEnabled } from '@/utils/liquid-ui';
 
 // Keep wire_transfer in the type for when KPay / wire transfer is re-enabled.
 type PaymentMethod = 'cod' | 'wire_transfer';
@@ -49,11 +56,13 @@ type PaymentMethod = 'cod' | 'wire_transfer';
 export default function CheckoutScreen() {
   const router = useRouter();
   const colors = useAppColors();
+  const { isDark } = useThemeMode();
   const insets = useSafeAreaInsets();
   const { rs, horizontalPadding, contentMaxWidth } = useResponsive();
   const { token } = useAuth();
   const { items, productItems, totalAmount, deliveryFeeAmount, isDeliveryFeeLoading, clearCart, syncDeliveryFee } = useCart();
   const { language, t, fs, lh } = useLanguage();
+  const liquid = isLiquidUiEnabled();
   const addressRef = useRef<AddressCheckoutHandle>(null);
   const scrollRef = useRef<ScrollView>(null);
   const notesFieldRef = useRef<View>(null);
@@ -91,6 +100,7 @@ export default function CheckoutScreen() {
   const [deliveryNotes, setDeliveryNotes] = useState('');
   // const [screenshotUri, setScreenshotUri] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [showCelebration, setShowCelebration] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const today = useMemo(() => new Date(), []);
@@ -247,37 +257,33 @@ export default function CheckoutScreen() {
       });
 
       clearCart();
-      router.replace('/(tabs)/orders' as Href);
+      hapticSuccess();
+      setShowCelebration(true);
+      const canAskRating = await shouldAutoPromptStoreRating();
+      Alert.alert(t('checkout.successTitle'), t('checkout.successMessage'), [
+        {
+          text: t('common.done'),
+          onPress: () => {
+            if (canAskRating) {
+              void openStoreReviewPage();
+            }
+            router.replace('/(tabs)/orders' as Href);
+          },
+        },
+      ]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('checkout.errorCheckoutFailed'));
+      const message = getUserFacingError(err, t('errors.checkoutFailed'), t);
+      if (message) setError(message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
-      <View
-        style={[
-          styles.headerBar,
-          {
-            backgroundColor: colors.surface,
-            borderBottomColor: colors.border,
-            paddingHorizontal: horizontalPadding,
-          },
-        ]}>
-        <Pressable
-          onPress={() => router.back()}
-          style={styles.backButton}
-          accessibilityRole="button"
-          accessibilityLabel="Go back">
-          <MaterialIcons name="arrow-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.text, fontSize: fs(rs(20)), lineHeight: lh(20) }]} numberOfLines={1}>
-          {t('checkout.title')}
-        </Text>
-        <View style={styles.headerSpacer} />
-      </View>
+    <SafeAreaView
+      style={[styles.screen, { backgroundColor: colors.background }]}
+      edges={liquid ? [] : ['top']}>
+      <DetailHeaderBar title={t('checkout.title')} />
 
       <KeyboardAwareScrollView
         ref={scrollRef}
@@ -507,11 +513,18 @@ export default function CheckoutScreen() {
                     : null),
                 },
               ]}
+              {...inputCaretProps(isDark)}
             />
           </View>
         </View>
 
-        {error ? <HelperText type="error">{error}</HelperText> : null}
+        {error ? (
+          <InlineErrorBanner
+            message={error}
+            onDismiss={() => setError('')}
+            style={{ marginHorizontal: 0, marginBottom: 12 }}
+          />
+        ) : null}
 
         <Button
           mode="contained"
@@ -522,6 +535,8 @@ export default function CheckoutScreen() {
           {t('checkout.placeOrder')}
         </Button>
       </KeyboardAwareScrollView>
+
+      <CelebrationBurst active={showCelebration} onFinished={() => setShowCelebration(false)} />
     </SafeAreaView>
   );
 }
@@ -532,27 +547,6 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
-  },
-  headerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 10,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontWeight: '700',
-  },
-  headerSpacer: {
-    width: 40,
   },
   content: {
     paddingTop: 16,

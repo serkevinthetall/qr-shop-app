@@ -4,11 +4,13 @@ import { useEffect } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DetailHeaderBar } from '@/components/detail-header-bar';
 import { useLanguage } from '@/contexts/language-context';
 import { useNotifications } from '@/contexts/notification-context';
-import { useAppColors } from '@/contexts/theme-context';
+import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { notificationDateToMs, type AppNotification } from '@/services/notification-api';
 import { formatPrice } from '@/types/product';
+import { isLiquidUiEnabled, liquidGlassBorder } from '@/utils/liquid-ui';
 
 function useRelativeTime() {
   const { t } = useLanguage();
@@ -45,9 +47,12 @@ function useRelativeTime() {
 export default function NotificationsScreen() {
   const router = useRouter();
   const colors = useAppColors();
+  const { isDark } = useThemeMode();
   const { t, fs, lh } = useLanguage();
   const { notifications, isLoading, error, refresh, markAllSeen } = useNotifications();
   const getRelativeTime = useRelativeTime();
+  const liquid = isLiquidUiEnabled();
+  const cardBorder = liquid ? liquidGlassBorder(isDark) : colors.border;
 
   // Opening the screen clears the unread badge.
   useEffect(() => {
@@ -76,7 +81,7 @@ export default function NotificationsScreen() {
     return (
       <Pressable
         onPress={onPress}
-        style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        style={[styles.item, { backgroundColor: colors.card, borderColor: cardBorder }]}>
         <View style={[styles.iconWrap, { backgroundColor: colors.primaryMuted }]}>
           <MaterialIcons
             name={isProduct ? 'local-mall' : 'confirmation-number'}
@@ -106,16 +111,10 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
-      <View style={[styles.headerBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.text, fontSize: fs(20), lineHeight: lh(20) }]} numberOfLines={1}>
-          {t('notifications.title')}
-        </Text>
-        <View style={styles.headerSpacer} />
-      </View>
+    <SafeAreaView
+      style={[styles.screen, { backgroundColor: colors.background }]}
+      edges={liquid ? [] : ['top']}>
+      <DetailHeaderBar title={t('notifications.title')} paddingHorizontal={16} />
 
       <FlatList
         data={notifications}
@@ -139,24 +138,6 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-  },
-  headerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    flex: 1,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  headerSpacer: {
-    width: 40,
   },
   listContent: {
     padding: 16,

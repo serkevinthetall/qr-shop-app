@@ -8,6 +8,7 @@ import { useLanguage } from '@/contexts/language-context';
 import { useAppColors } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import { fetchAddresses } from '@/services/address-api';
+import { getUserFacingError } from '@/services/auth-error';
 import type { Address } from '@/types/address';
 import { canEditAddress, getDeliveryAddresses, getMainAddress } from '@/types/address';
 
@@ -98,7 +99,10 @@ export const AddressCheckoutSection = forwardRef<AddressCheckoutHandle, AddressC
             return;
           }
 
-          const message = err instanceof Error ? err.message : 'Could not load saved addresses.';
+          const message = getUserFacingError(err, t('errors.loadAddressList'));
+          if (!message) {
+            return;
+          }
           setLoadError(message);
           onErrorRef.current(message);
         })
@@ -153,8 +157,8 @@ export const AddressCheckoutSection = forwardRef<AddressCheckoutHandle, AddressC
       try {
         await refreshAddresses(addressId);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Address saved but list refresh failed.';
-        setLoadError(message);
+        const message = getUserFacingError(err, t('errors.addressRefreshFailed'));
+        if (message) setLoadError(message);
       }
     };
 
