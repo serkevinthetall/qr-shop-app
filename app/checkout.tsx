@@ -270,8 +270,8 @@ export default function CheckoutScreen() {
         preferredDeliveryDate,
         deliveryNotes,
         fulfillmentMethod: selection.fulfillmentMethod,
-        addressId:
-          selection.fulfillmentMethod === 'delivery' ? String(selection.addressId) : '',
+        // Odoo always needs a Contact delivery location on the SO.
+        addressId: String(selection.addressId),
         pickupPointId:
           selection.fulfillmentMethod === 'pickup' ? String(selection.pickupPointId) : '',
         couponCode: useCoupon && couponAvailable ? availableCoupon!.x_studio_coupon_code : '',
