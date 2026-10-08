@@ -2,7 +2,6 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ActivityIndicator, HelperText } from 'react-native-paper';
 
-import { AddressDisplayText } from '@/components/address/address-display-text';
 import {
   AddressCheckoutSection,
   type AddressCheckoutHandle,
@@ -13,7 +12,6 @@ import { useResponsive } from '@/hooks/use-responsive';
 import { fetchAddresses } from '@/services/address-api';
 import { getUserFacingError } from '@/services/auth-error';
 import { fetchPickupPoints } from '@/services/pickup-point-api';
-import type { Address } from '@/types/address';
 import { getDeliveryAddresses } from '@/types/address';
 import type { FulfillmentMethod, PickupPoint } from '@/types/pickup-point';
 
@@ -95,24 +93,16 @@ export const FulfillmentCheckoutSection = forwardRef<
   const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([]);
   const [selectedPickupId, setSelectedPickupId] = useState<number | null>(null);
   const selectedPickupIdRef = useRef<number | null>(null);
-  const [contactAddresses, setContactAddresses] = useState<Address[]>([]);
-  const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
+  /** Silent Odoo contact (partner_shipping_id) — not shown in Self Pickup UI. */
   const selectedContactIdRef = useRef<number | null>(null);
   const [isLoadingPickup, setIsLoadingPickup] = useState(true);
-  const [isLoadingContact, setIsLoadingContact] = useState(true);
   const [pickupError, setPickupError] = useState('');
-  const [contactError, setContactError] = useState('');
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
 
   const selectPickupId = useCallback((id: number | null) => {
     selectedPickupIdRef.current = id;
     setSelectedPickupId(id);
-  }, []);
-
-  const selectContactId = useCallback((id: number | null) => {
-    selectedContactIdRef.current = id;
-    setSelectedContactId(id);
   }, []);
 
   const setFulfillment = useCallback(
@@ -149,29 +139,16 @@ export const FulfillmentCheckoutSection = forwardRef<
   }, [selectPickupId, t, token]);
 
   const loadContactAddresses = useCallback(async () => {
-    setIsLoadingContact(true);
     try {
       const list = getDeliveryAddresses(await fetchAddresses(token));
-      setContactAddresses(list);
-      setContactError('');
-
       if (selectedContactIdRef.current && list.some((item) => item.id === selectedContactIdRef.current)) {
-        selectContactId(selectedContactIdRef.current);
-      } else {
-        selectContactId(list[0]?.id ?? null);
+        return;
       }
-    } catch (err) {
-      const message = getUserFacingError(err, t('errors.loadAddressList'));
-      setContactAddresses([]);
-      selectContactId(null);
-      if (message) {
-        setContactError(message);
-        onErrorRef.current(message);
-      }
-    } finally {
-      setIsLoadingContact(false);
+      selectedContactIdRef.current = list[0]?.id ?? null;
+    } catch {
+      selectedContactIdRef.current = null;
     }
-  }, [selectContactId, t, token]);
+  }, [token]);
 
   useEffect(() => {
     void loadPickupPoints();
@@ -210,8 +187,6 @@ export const FulfillmentCheckoutSection = forwardRef<
 
   const selectedPickup =
     pickupPoints.find((point) => Number(point.id) === Number(selectedPickupId)) ?? null;
-  const selectedContact =
-    contactAddresses.find((address) => Number(address.id) === Number(selectedContactId)) ?? null;
 
   return (
     <View style={styles.wrap}>
@@ -356,119 +331,6 @@ export const FulfillmentCheckoutSection = forwardRef<
                     {!selectedPickupId ? (
                       <HelperText type="error" visible>
                         {t('fulfillment.markPickup')}
-                      </HelperText>
-                    ) : null}
-                  </>
-                )}
-              </>
-            )}
-
-            <Text
-              style={[
-                styles.hintLabel,
-                { color: colors.textMuted, fontSize: fs(rs(12)), lineHeight: lh(12), marginTop: 16 },
-              ]}>
-              {t('fulfillment.chooseContact')}
-            </Text>
-            <Text
-              style={{
-                color: colors.textMuted,
-                fontSize: fs(rs(12)),
-                lineHeight: lh(12),
-                marginBottom: 10,
-              }}>
-              {t('fulfillment.contactHint')}
-            </Text>
-
-            {isLoadingContact ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color={colors.primary} />
-                <Text style={{ color: colors.textMuted, marginLeft: 10, lineHeight: lh(14) }}>
-                  {t('fulfillment.loadingContact')}
-                </Text>
-              </View>
-            ) : (
-              <>
-                {contactError ? <HelperText type="info">{contactError}</HelperText> : null}
-
-                {!contactAddresses.length ? (
-                  <View style={[styles.emptyBox, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-                    <Text
-                      style={[
-                        styles.emptyTitle,
-                        { color: colors.text, fontSize: fs(rs(15)), lineHeight: lh(15) },
-                      ]}>
-                      {t('fulfillment.noContactYet')}
-                    </Text>
-                    <Text
-                      style={{ color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }}>
-                      {t('fulfillment.noContactHint')}
-                    </Text>
-                  </View>
-                ) : (
-                  <>
-                    {selectedContact ? (
-                      <View
-                        style={[
-                          styles.selectedCard,
-                          {
-                            backgroundColor: colors.primaryMuted,
-                            borderColor: colors.primary,
-                          },
-                        ]}>
-                        <Text style={[styles.selectedBadge, { color: colors.primary, lineHeight: lh(12) }]}>
-                          {t('fulfillment.selected')}
-                        </Text>
-                        <AddressDisplayText
-                          address={selectedContact}
-                          nameSize={rs(15)}
-                          metaSize={rs(13)}
-                          textColor={colors.text}
-                          mutedColor={colors.textMuted}
-                        />
-                      </View>
-                    ) : null}
-
-                    {contactAddresses.map((address) => {
-                      const isSelected = Number(selectedContactId) === Number(address.id);
-
-                      return (
-                        <TouchableOpacity
-                          key={address.id}
-                          activeOpacity={0.75}
-                          onPress={() => selectContactId(address.id)}
-                          style={[
-                            styles.pointCard,
-                            {
-                              backgroundColor: isSelected ? colors.primaryMuted : colors.inputBg,
-                              borderColor: isSelected ? colors.primary : colors.border,
-                            },
-                          ]}>
-                          <View
-                            style={[
-                              styles.radioOuter,
-                              { borderColor: isSelected ? colors.primary : colors.border },
-                            ]}>
-                            {isSelected ? (
-                              <View style={[styles.radioInner, { backgroundColor: colors.primary }]} />
-                            ) : null}
-                          </View>
-                          <View style={styles.pointContent}>
-                            <AddressDisplayText
-                              address={address}
-                              nameSize={rs(14)}
-                              metaSize={rs(12)}
-                              textColor={colors.text}
-                              mutedColor={colors.textMuted}
-                            />
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-
-                    {!selectedContactId ? (
-                      <HelperText type="error" visible>
-                        {t('fulfillment.markContact')}
                       </HelperText>
                     ) : null}
                   </>
