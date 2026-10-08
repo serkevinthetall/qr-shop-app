@@ -12,7 +12,7 @@ import { useResponsive } from '@/hooks/use-responsive';
 import { fetchAddresses } from '@/services/address-api';
 import { getUserFacingError } from '@/services/auth-error';
 import { fetchPickupPoints } from '@/services/pickup-point-api';
-import { getDeliveryAddresses } from '@/types/address';
+import { getDeliveryAddresses, getMainAddress } from '@/types/address';
 import type { FulfillmentMethod, PickupPoint } from '@/types/pickup-point';
 
 export type FulfillmentCheckoutHandle = {
@@ -138,17 +138,21 @@ export const FulfillmentCheckoutSection = forwardRef<
     }
   }, [selectPickupId, t, token]);
 
+  const resolveMainContactId = useCallback(async () => {
+    const list = getDeliveryAddresses(await fetchAddresses(token));
+    const main = getMainAddress(list);
+    const contactId = main?.id ?? list[0]?.id ?? null;
+    selectedContactIdRef.current = contactId;
+    return contactId;
+  }, [token]);
+
   const loadContactAddresses = useCallback(async () => {
     try {
-      const list = getDeliveryAddresses(await fetchAddresses(token));
-      if (selectedContactIdRef.current && list.some((item) => item.id === selectedContactIdRef.current)) {
-        return;
-      }
-      selectedContactIdRef.current = list[0]?.id ?? null;
+      await resolveMainContactId();
     } catch {
       selectedContactIdRef.current = null;
     }
-  }, [token]);
+  }, [resolveMainContactId]);
 
   useEffect(() => {
     void loadPickupPoints();
@@ -165,9 +169,18 @@ export const FulfillmentCheckoutSection = forwardRef<
       resolveSelection: async () => {
         if (method === 'pickup') {
           const pickupPointId = selectedPickupIdRef.current;
-          const addressId = selectedContactIdRef.current;
           if (!pickupPointId) {
             throw new Error(t('checkout.errorSelectPickup'));
+          }
+
+          // Background: always attach the customer's main Contact for Odoo.
+          let addressId = selectedContactIdRef.current;
+          if (!addressId) {
+            try {
+              addressId = await resolveMainContactId();
+            } catch {
+              addressId = null;
+            }
           }
           if (!addressId) {
             throw new Error(t('checkout.errorSelectContact'));
@@ -182,7 +195,7 @@ export const FulfillmentCheckoutSection = forwardRef<
         return { fulfillmentMethod: 'delivery', addressId };
       },
     }),
-    [method, t],
+    [method, resolveMainContactId, t],
   );
 
   const selectedPickup =
