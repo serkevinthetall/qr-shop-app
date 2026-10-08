@@ -194,33 +194,6 @@ export const FulfillmentCheckoutSection = forwardRef<
         {t('fulfillment.howToFulfill')}
       </Text>
 
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, padding: 0 }]}>
-        <View style={{ padding: 16, paddingBottom: method === 'delivery' ? 0 : 16 }}>
-          <AccordionHeader
-            title={t('fulfillment.delivery')}
-            subtitle={t('fulfillment.tapToDeliver')}
-            open={method === 'delivery'}
-            onPress={() => setFulfillment('delivery')}
-            colors={colors}
-            titleSize={fs(rs(16)) ?? rs(16)}
-            subtitleSize={fs(rs(12)) ?? rs(12)}
-            chevronSize={fs(rs(18)) ?? rs(18)}
-          />
-        </View>
-
-        {method === 'delivery' ? (
-          <View style={styles.deliveryBody}>
-            <AddressCheckoutSection
-              ref={addressRef}
-              token={token}
-              onError={onError}
-              onSelectionChange={onAddressSelectionChange}
-              embedded
-            />
-          </View>
-        ) : null}
-      </View>
-
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <AccordionHeader
           title={t('fulfillment.selfPickup')}
@@ -367,6 +340,33 @@ export const FulfillmentCheckoutSection = forwardRef<
           </View>
         ) : null}
       </View>
+
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, padding: 0 }]}>
+        <View style={{ padding: 16, paddingBottom: method === 'delivery' ? 12 : 16 }}>
+          <AccordionHeader
+            title={t('fulfillment.delivery')}
+            subtitle={t('fulfillment.tapToDeliver')}
+            open={method === 'delivery'}
+            onPress={() => setFulfillment('delivery')}
+            colors={colors}
+            titleSize={fs(rs(16)) ?? rs(16)}
+            subtitleSize={fs(rs(12)) ?? rs(12)}
+            chevronSize={fs(rs(18)) ?? rs(18)}
+          />
+        </View>
+
+        {method === 'delivery' ? (
+          <View style={styles.deliveryBody}>
+            <AddressCheckoutSection
+              ref={addressRef}
+              token={token}
+              onError={onError}
+              onSelectionChange={onAddressSelectionChange}
+              embedded
+            />
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 });
@@ -468,5 +468,6 @@ const styles = StyleSheet.create({
   },
   deliveryBody: {
     paddingHorizontal: 0,
+    paddingTop: 4,
   },
 });

@@ -326,6 +326,7 @@ const styles = StyleSheet.create({
   },
   embeddedBody: {
     paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 16,
   },
   cardTitle: {
@@ -334,6 +335,7 @@ const styles = StyleSheet.create({
   },
   addButton: {
     alignSelf: 'flex-start',
+    marginTop: 4,
     marginBottom: 14,
   },
   addButtonContent: {
