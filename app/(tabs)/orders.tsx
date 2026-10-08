@@ -208,7 +208,12 @@ function OrderCard({
   const deliveryStatus = getOrderDeliveryStatus(order);
   const statusBadge = getStatusBadgeColors(deliveryStatus, colors);
   const shippingLabel = getOrderShippingLabel(order);
-  const shippingPreview = shippingLabel.split('\n').filter(Boolean).slice(0, 2).join(' · ');
+  const pickupPreview =
+    order.fulfillment_method === 'pickup' && order.pickup_point?.name
+      ? `${lang.t('orderDetail.pickupPoint')} · ${order.pickup_point.name}`
+      : '';
+  const shippingPreview =
+    pickupPreview || shippingLabel.split('\n').filter(Boolean).slice(0, 2).join(' · ');
   const statusHint = getDeliveryStatusHint(order, lang.t);
 
   return (

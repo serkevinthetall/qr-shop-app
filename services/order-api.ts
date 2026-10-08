@@ -59,6 +59,13 @@ export type Order = {
   x_studio_preferred_delivery_date?: string | false;
   x_studio_delivery_notes?: string | false;
   note?: string | false;
+  fulfillment_method?: 'delivery' | 'pickup' | string;
+  pickup_point?: {
+    id: number;
+    name: string;
+    address?: string;
+    township?: string | null;
+  } | null;
   delivery_status?: DeliveryStatus;
   delivering_now_count?: number;
   coming_later_count?: number;
@@ -115,7 +122,11 @@ export type CheckoutPayload = {
   preferredDeliveryDate?: string;
   deliveryNotes?: string;
   note?: string;
+  /** Required for delivery; omit / empty for self pickup. */
   addressId?: string;
+  /** Defaults to delivery on the API when omitted (old-app safe). */
+  fulfillmentMethod?: 'delivery' | 'pickup';
+  pickupPointId?: string;
   couponCode?: string;
   items: CheckoutItem[];
   paymentScreenshot?: {
@@ -231,7 +242,9 @@ export async function checkoutOrder(token: string, payload: CheckoutPayload) {
 
   formData.append('order_type', 'quotation_sent');
   formData.append('payment_method', payload.paymentMethod);
+  formData.append('fulfillment_method', payload.fulfillmentMethod ?? 'delivery');
   formData.append('address_id', payload.addressId ?? '');
+  formData.append('pickup_point_id', payload.pickupPointId ?? '');
   formData.append('preferred_delivery_date', payload.preferredDeliveryDate ?? '');
   formData.append('delivery_notes', payload.deliveryNotes ?? '');
   formData.append('note', payload.note ?? '');

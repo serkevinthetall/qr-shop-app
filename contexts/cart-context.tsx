@@ -31,7 +31,12 @@ type CartContextValue = {
   clearCart: () => void;
   syncPricesFromProducts: (products: Product[]) => void;
   /** Refresh Delivery line from main address or a specific checkout branch. */
-  syncDeliveryFee: (options?: { addressId?: number | null; zip?: string }) => Promise<void>;
+  syncDeliveryFee: (options?: {
+    addressId?: number | null;
+    zip?: string;
+    /** When pickup, strip Delivery line (fee always free). */
+    mode?: 'delivery' | 'pickup';
+  }) => Promise<void>;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -91,11 +96,23 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [user, isReady]);
 
   const syncDeliveryFee = useCallback(
-    async (options: { addressId?: number | null; zip?: string } = {}) => {
+    async (
+      options: {
+        addressId?: number | null;
+        zip?: string;
+        mode?: 'delivery' | 'pickup';
+      } = {},
+    ) => {
       const seq = ++syncSeq.current;
       setIsDeliveryFeeLoading(true);
 
       if (!token) {
+        setIsDeliveryFeeLoading(false);
+        setItems((current) => withoutDelivery(current));
+        return;
+      }
+
+      if (options.mode === 'pickup') {
         setIsDeliveryFeeLoading(false);
         setItems((current) => withoutDelivery(current));
         return;

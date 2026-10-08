@@ -20,6 +20,8 @@ type AddressCheckoutSectionProps = {
   token: string;
   onError: (message: string) => void;
   onSelectionChange?: (addressId: number | null) => void;
+  /** When true, omit outer card chrome (used inside fulfillment accordion). */
+  embedded?: boolean;
 };
 
 function isSameAddressId(a: number | null, b: number) {
@@ -27,7 +29,7 @@ function isSameAddressId(a: number | null, b: number) {
 }
 
 export const AddressCheckoutSection = forwardRef<AddressCheckoutHandle, AddressCheckoutSectionProps>(
-  function AddressCheckoutSection({ token, onError, onSelectionChange }, ref) {
+  function AddressCheckoutSection({ token, onError, onSelectionChange, embedded = false }, ref) {
     const colors = useAppColors();
     const { rs } = useResponsive();
     const { t, fs, lh } = useLanguage();
@@ -162,10 +164,13 @@ export const AddressCheckoutSection = forwardRef<AddressCheckoutHandle, AddressC
       }
     };
 
-    return (
+    const body = (
       <>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.cardTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>{t('addressSection.deliveryAddress')}</Text>
+          {!embedded ? (
+            <Text style={[styles.cardTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
+              {t('addressSection.deliveryAddress')}
+            </Text>
+          ) : null}
 
           <Button
             mode="contained-tonal"
@@ -285,7 +290,18 @@ export const AddressCheckoutSection = forwardRef<AddressCheckoutHandle, AddressC
               )}
             </>
           )}
-        </View>
+      </>
+    );
+
+    return (
+      <>
+        {embedded ? (
+          <View style={styles.embeddedBody}>{body}</View>
+        ) : (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {body}
+          </View>
+        )}
 
         <AddressFormModal
           visible={formMode !== null}
@@ -307,6 +323,10 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     overflow: 'hidden',
+  },
+  embeddedBody: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
   cardTitle: {
     fontWeight: '600',

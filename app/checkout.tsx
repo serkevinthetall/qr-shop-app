@@ -18,9 +18,10 @@ import { Button, Checkbox, HelperText, RadioButton } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
-  AddressCheckoutSection,
-  type AddressCheckoutHandle,
-} from '@/components/checkout/address-section';
+  FulfillmentCheckoutSection,
+  type FulfillmentCheckoutHandle,
+} from '@/components/checkout/fulfillment-section';
+import type { FulfillmentMethod } from '@/types/pickup-point';
 import { DatePickerField } from '@/components/date-picker-field';
 import { CelebrationBurst } from '@/components/celebration-burst';
 import { DetailHeaderBar } from '@/components/detail-header-bar';
@@ -63,10 +64,11 @@ export default function CheckoutScreen() {
   const { items, productItems, totalAmount, deliveryFeeAmount, isDeliveryFeeLoading, clearCart, syncDeliveryFee } = useCart();
   const { language, t, fs, lh } = useLanguage();
   const liquid = isLiquidUiEnabled();
-  const addressRef = useRef<AddressCheckoutHandle>(null);
+  const fulfillmentRef = useRef<FulfillmentCheckoutHandle>(null);
   const scrollRef = useRef<ScrollView>(null);
   const notesFieldRef = useRef<View>(null);
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<FulfillmentMethod>('pickup');
 
   const deliveryFeeLabel = useMemo(() => {
     if (isDeliveryFeeLoading && deliveryFeeAmount <= 0) {
@@ -82,13 +84,39 @@ export default function CheckoutScreen() {
     setError(message);
   }, []);
 
-  const handleAddressSelectionChange = useCallback((addressId: number | null) => {
-    setSelectedAddressId(addressId);
-    if (addressId) {
-      void syncDeliveryFee({ addressId });
-    } else {
-      void syncDeliveryFee();
-    }
+  const handleFulfillmentChange = useCallback(
+    (method: FulfillmentMethod) => {
+      setFulfillmentMethod(method);
+      if (method === 'pickup') {
+        void syncDeliveryFee({ mode: 'pickup' });
+        return;
+      }
+      if (selectedAddressId) {
+        void syncDeliveryFee({ addressId: selectedAddressId, mode: 'delivery' });
+      } else {
+        void syncDeliveryFee({ mode: 'delivery' });
+      }
+    },
+    [selectedAddressId, syncDeliveryFee],
+  );
+
+  const handleAddressSelectionChange = useCallback(
+    (addressId: number | null) => {
+      setSelectedAddressId(addressId);
+      if (fulfillmentMethod !== 'delivery') {
+        return;
+      }
+      if (addressId) {
+        void syncDeliveryFee({ addressId, mode: 'delivery' });
+      } else {
+        void syncDeliveryFee({ mode: 'delivery' });
+      }
+    },
+    [fulfillmentMethod, syncDeliveryFee],
+  );
+
+  useEffect(() => {
+    void syncDeliveryFee({ mode: 'pickup' });
   }, [syncDeliveryFee]);
 
   const [membership, setMembership] = useState<Membership | null>(null);
@@ -227,18 +255,25 @@ export default function CheckoutScreen() {
     setIsSubmitting(true);
 
     try {
-      const addressId =
-        selectedAddressId ?? (await addressRef.current?.resolveAddressId());
+      const selection = await fulfillmentRef.current?.resolveSelection();
 
-      if (!addressId) {
-        throw new Error(t('checkout.errorSelectAddress'));
+      if (!selection) {
+        throw new Error(
+          fulfillmentMethod === 'pickup'
+            ? t('checkout.errorSelectPickup')
+            : t('checkout.errorSelectAddress'),
+        );
       }
 
       await checkoutOrder(token, {
         paymentMethod,
         preferredDeliveryDate,
         deliveryNotes,
-        addressId: String(addressId),
+        fulfillmentMethod: selection.fulfillmentMethod,
+        addressId:
+          selection.fulfillmentMethod === 'delivery' ? String(selection.addressId) : '',
+        pickupPointId:
+          selection.fulfillmentMethod === 'pickup' ? String(selection.pickupPointId) : '',
         couponCode: useCoupon && couponAvailable ? availableCoupon!.x_studio_coupon_code : '',
         items: items.map((item) => ({
           product_id: item.product.id,
@@ -349,11 +384,12 @@ export default function CheckoutScreen() {
         </View>
 
         {token ? (
-          <AddressCheckoutSection
-            ref={addressRef}
+          <FulfillmentCheckoutSection
+            ref={fulfillmentRef}
             token={token}
             onError={handleAddressError}
-            onSelectionChange={handleAddressSelectionChange}
+            onFulfillmentChange={handleFulfillmentChange}
+            onAddressSelectionChange={handleAddressSelectionChange}
           />
         ) : null}
 

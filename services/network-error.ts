@@ -68,6 +68,7 @@ export function getApiFallbackMessage(
     | 'loadMembership'
     | 'loadCoupons'
     | 'loadDeliveryFee'
+    | 'loadPickupPoints'
     | 'loadProfile'
     | 'generic',
 ) {

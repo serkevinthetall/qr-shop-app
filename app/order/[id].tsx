@@ -215,7 +215,16 @@ export default function OrderDetailScreen() {
               />
             )}
 
-            {shippingLabel ? (
+            {order.fulfillment_method === 'pickup' && order.pickup_point ? (
+              <View style={styles.detailRow}>
+                <Text style={[styles.detailLabel, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
+                  {t('orderDetail.pickupPoint')}
+                </Text>
+                <Text style={[styles.detailValue, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}>
+                  {[order.pickup_point.name, order.pickup_point.address].filter(Boolean).join('\n')}
+                </Text>
+              </View>
+            ) : shippingLabel ? (
               <View style={styles.detailRow}>
                 <Text style={[styles.detailLabel, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
                   {t('orderDetail.deliveryAddress')}
