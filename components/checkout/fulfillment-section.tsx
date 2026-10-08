@@ -89,7 +89,7 @@ export const FulfillmentCheckoutSection = forwardRef<
   const { t, fs, lh } = useLanguage();
 
   const addressRef = useRef<AddressCheckoutHandle>(null);
-  const [method, setMethod] = useState<FulfillmentMethod>('pickup');
+  const [method, setMethod] = useState<FulfillmentMethod>('delivery');
   const [pickupPoints, setPickupPoints] = useState<PickupPoint[]>([]);
   const [selectedPickupId, setSelectedPickupId] = useState<number | null>(null);
   const selectedPickupIdRef = useRef<number | null>(null);
@@ -156,7 +156,7 @@ export const FulfillmentCheckoutSection = forwardRef<
   }, [loadContactAddresses, loadPickupPoints]);
 
   useEffect(() => {
-    onFulfillmentChange('pickup');
+    onFulfillmentChange('delivery');
   }, [onFulfillmentChange]);
 
   useImperativeHandle(
@@ -193,6 +193,33 @@ export const FulfillmentCheckoutSection = forwardRef<
       <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
         {t('fulfillment.howToFulfill')}
       </Text>
+
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, padding: 0 }]}>
+        <View style={{ padding: 16, paddingBottom: method === 'delivery' ? 0 : 16 }}>
+          <AccordionHeader
+            title={t('fulfillment.delivery')}
+            subtitle={t('fulfillment.tapToDeliver')}
+            open={method === 'delivery'}
+            onPress={() => setFulfillment('delivery')}
+            colors={colors}
+            titleSize={fs(rs(16)) ?? rs(16)}
+            subtitleSize={fs(rs(12)) ?? rs(12)}
+            chevronSize={fs(rs(18)) ?? rs(18)}
+          />
+        </View>
+
+        {method === 'delivery' ? (
+          <View style={styles.deliveryBody}>
+            <AddressCheckoutSection
+              ref={addressRef}
+              token={token}
+              onError={onError}
+              onSelectionChange={onAddressSelectionChange}
+              embedded
+            />
+          </View>
+        ) : null}
+      </View>
 
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <AccordionHeader
@@ -337,33 +364,6 @@ export const FulfillmentCheckoutSection = forwardRef<
                 )}
               </>
             )}
-          </View>
-        ) : null}
-      </View>
-
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, padding: 0 }]}>
-        <View style={{ padding: 16, paddingBottom: method === 'delivery' ? 0 : 16 }}>
-          <AccordionHeader
-            title={t('fulfillment.deliveryAddress')}
-            subtitle={t('fulfillment.tapToDeliver')}
-            open={method === 'delivery'}
-            onPress={() => setFulfillment('delivery')}
-            colors={colors}
-            titleSize={fs(rs(16)) ?? rs(16)}
-            subtitleSize={fs(rs(12)) ?? rs(12)}
-            chevronSize={fs(rs(18)) ?? rs(18)}
-          />
-        </View>
-
-        {method === 'delivery' ? (
-          <View style={styles.deliveryBody}>
-            <AddressCheckoutSection
-              ref={addressRef}
-              token={token}
-              onError={onError}
-              onSelectionChange={onAddressSelectionChange}
-              embedded
-            />
           </View>
         ) : null}
       </View>

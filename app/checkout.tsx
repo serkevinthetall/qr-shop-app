@@ -68,7 +68,7 @@ export default function CheckoutScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const notesFieldRef = useRef<View>(null);
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
-  const [fulfillmentMethod, setFulfillmentMethod] = useState<FulfillmentMethod>('pickup');
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<FulfillmentMethod>('delivery');
 
   const deliveryFeeLabel = useMemo(() => {
     if (isDeliveryFeeLoading && deliveryFeeAmount <= 0) {
@@ -116,7 +116,7 @@ export default function CheckoutScreen() {
   );
 
   useEffect(() => {
-    void syncDeliveryFee({ mode: 'pickup' });
+    void syncDeliveryFee({ mode: 'delivery' });
   }, [syncDeliveryFee]);
 
   const [membership, setMembership] = useState<Membership | null>(null);
