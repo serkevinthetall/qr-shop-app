@@ -38,6 +38,8 @@ function AccordionHeader({
   titleSize,
   subtitleSize,
   chevronSize,
+  titleLineHeight,
+  subtitleLineHeight,
 }: {
   title: string;
   subtitle?: string;
@@ -47,6 +49,9 @@ function AccordionHeader({
   titleSize: number;
   subtitleSize: number;
   chevronSize: number;
+  /** Prefer `lh()` — undefined so Burmese diacritics are not clipped. */
+  titleLineHeight?: number;
+  subtitleLineHeight?: number;
 }) {
   return (
     <Pressable
@@ -61,16 +66,30 @@ function AccordionHeader({
       accessibilityRole="button"
       accessibilityState={{ expanded: open }}>
       <View style={styles.accordionHeaderText}>
-        <Text style={[styles.accordionTitle, { color: colors.text, fontSize: titleSize, lineHeight: titleSize + 4 }]}>
+        <Text
+          style={[
+            styles.accordionTitle,
+            {
+              color: colors.text,
+              fontSize: titleSize,
+              ...(titleLineHeight != null ? { lineHeight: titleLineHeight } : null),
+            },
+          ]}>
           {title}
         </Text>
         {subtitle && !open ? (
-          <Text style={{ color: colors.textMuted, fontSize: subtitleSize, lineHeight: subtitleSize + 4, marginTop: 4 }}>
+          <Text
+            style={{
+              color: colors.textMuted,
+              fontSize: subtitleSize,
+              marginTop: 6,
+              ...(subtitleLineHeight != null ? { lineHeight: subtitleLineHeight } : null),
+            }}>
             {subtitle}
           </Text>
         ) : null}
       </View>
-      <Text style={{ color: colors.textMuted, fontSize: chevronSize, lineHeight: chevronSize + 2 }}>
+      <Text style={[styles.accordionChevron, { color: colors.textMuted, fontSize: chevronSize }]}>
         {open ? '▾' : '▸'}
       </Text>
     </Pressable>
@@ -217,6 +236,8 @@ export const FulfillmentCheckoutSection = forwardRef<
           titleSize={fs(rs(16)) ?? rs(16)}
           subtitleSize={fs(rs(12)) ?? rs(12)}
           chevronSize={fs(rs(18)) ?? rs(18)}
+          titleLineHeight={lh(16)}
+          subtitleLineHeight={lh(12)}
         />
 
         {method === 'pickup' ? (
@@ -365,6 +386,8 @@ export const FulfillmentCheckoutSection = forwardRef<
             titleSize={fs(rs(16)) ?? rs(16)}
             subtitleSize={fs(rs(12)) ?? rs(12)}
             chevronSize={fs(rs(18)) ?? rs(18)}
+            titleLineHeight={lh(16)}
+            subtitleLineHeight={lh(12)}
           />
         </View>
 
@@ -390,39 +413,45 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontWeight: '600',
-    marginBottom: 10,
+    marginBottom: 12,
+    paddingVertical: 2,
   },
   card: {
     borderWidth: 1,
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
-    overflow: 'hidden',
   },
   accordionHeader: {
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingTop: 14,
+    paddingBottom: 14,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   accordionHeaderText: {
     flex: 1,
     minWidth: 0,
     paddingRight: 10,
+    paddingVertical: 2,
   },
   accordionTitle: {
     fontWeight: '600',
+  },
+  accordionChevron: {
+    marginTop: 2,
+    paddingVertical: 2,
   },
   accordionBody: {
     marginTop: 14,
   },
   hintLabel: {
     fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 10,
+    letterSpacing: 0.2,
+    marginBottom: 12,
+    paddingVertical: 2,
   },
   loadingRow: {
     flexDirection: 'row',
