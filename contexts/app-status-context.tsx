@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { AppState, Linking } from 'react-native';
 
+import { isLocalMaintenanceOverride } from '@/constants/maintenance';
 import { useNetwork } from '@/contexts/network-context';
 import {
   fetchAppConfig,
@@ -26,6 +27,8 @@ import {
 import { isVersionBelow } from '@/utils/version';
 
 type AppStatusContextValue = {
+  /** Backend (or local emergency) shop pause — announcement UI, no Retry. */
+  maintenance: boolean;
   forceUpdateRequired: boolean;
   serverDown: boolean;
   isChecking: boolean;
@@ -211,6 +214,9 @@ export function AppStatusProvider({ children }: { children: React.ReactNode }) {
   const forceUpdateRequired =
     !forceUpdateDismissed &&
     (simulateForceUpdate || (config ? isVersionBelow(installedVersion, minVersion) : false));
+  const maintenance =
+    !forceUpdateRequired &&
+    (isLocalMaintenanceOverride() || Boolean(config?.maintenance));
   const storeUrl = config ? getStoreUrl(config) : '';
 
   const openStore = useCallback(async () => {
@@ -229,8 +235,13 @@ export function AppStatusProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(
     () => ({
+      maintenance,
       forceUpdateRequired,
-      serverDown: (serverDown || simulateServerDown) && isOnline && !forceUpdateRequired,
+      serverDown:
+        (serverDown || simulateServerDown) &&
+        isOnline &&
+        !forceUpdateRequired &&
+        !maintenance,
       isChecking,
       storeUrl,
       installedVersion,
@@ -247,6 +258,7 @@ export function AppStatusProvider({ children }: { children: React.ReactNode }) {
       reportServerDown,
     }),
     [
+      maintenance,
       forceUpdateRequired,
       serverDown,
       simulateServerDown,

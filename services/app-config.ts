@@ -10,6 +10,8 @@ import {
 import { warmCloudflareDoh } from '@/services/cloudflare-doh';
 
 export type AppConfig = {
+  /** Backend shop pause — polled; flip on API without a new app build. */
+  maintenance: boolean;
   min_version: string;
   min_ios_version: string;
   min_android_version: string;
@@ -98,7 +100,10 @@ export async function fetchAppConfig(timeoutMs = 45000): Promise<AppConfig> {
         throw new Error(`App config HTTP ${response.status}`);
       }
 
-      const data = (await response.json()) as Partial<AppConfig> & { success?: boolean };
+      const data = (await response.json()) as Partial<AppConfig> & {
+        success?: boolean;
+        maintenance?: boolean | string | number;
+      };
 
       if (!data || data.success === false) {
         throw new Error('Invalid app config response');
@@ -106,7 +111,16 @@ export async function fetchAppConfig(timeoutMs = 45000): Promise<AppConfig> {
 
       noteApiBaseSuccess(baseUrl);
 
+      const maintenanceRaw = data.maintenance;
+      const maintenance =
+        maintenanceRaw === true ||
+        maintenanceRaw === 1 ||
+        String(maintenanceRaw).trim().toLowerCase() === 'true' ||
+        String(maintenanceRaw).trim().toLowerCase() === '1' ||
+        String(maintenanceRaw).trim().toLowerCase() === 'yes';
+
       return {
+        maintenance,
         min_version: String(data.min_version || '1.0.0'),
         min_ios_version: String(data.min_ios_version || data.min_version || '1.0.0'),
         min_android_version: String(data.min_android_version || data.min_version || '1.0.0'),

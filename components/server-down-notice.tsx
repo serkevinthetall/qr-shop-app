@@ -9,20 +9,30 @@ import { useAppColors } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import { exitAppProcess } from '@/utils/quit-app';
 
-/** Shown when the device is online but the QR Shop API is unreachable. */
+/**
+ * Blocks the app when the API is unreachable, or when maintenance mode is on
+ * (shop paused via backend app-config — announcement-style overlay).
+ */
 export function ServerDownNotice() {
   const colors = useAppColors();
   const { rs } = useResponsive();
   const { t, fs, lh } = useLanguage();
   const { isOnline } = useNetwork();
-  const { serverDown, forceUpdateRequired, isChecking, refreshStatus } = useAppStatus();
+  const {
+    maintenance,
+    serverDown,
+    forceUpdateRequired,
+    isChecking,
+    refreshStatus,
+  } = useAppStatus();
   const [isQuitting, setIsQuitting] = useState(false);
 
-  const visible = serverDown && isOnline && !forceUpdateRequired;
+  const visible =
+    !forceUpdateRequired && (maintenance || (serverDown && isOnline));
   const busy = isChecking || isQuitting;
 
   const handleRetry = async () => {
-    if (busy) {
+    if (busy || maintenance) {
       return;
     }
 
@@ -43,6 +53,115 @@ export function ServerDownNotice() {
       setIsQuitting(false);
     }
   };
+
+  if (maintenance) {
+    return (
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={handleQuit}>
+        <View style={[styles.announceBackdrop, { backgroundColor: colors.background }]}>
+          <View
+            style={[
+              styles.announceCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                shadowColor: colors.shadow,
+              },
+            ]}>
+            <View style={[styles.announceIconWrap, { backgroundColor: colors.primaryMuted }]}>
+              <MaterialCommunityIcons
+                name="storefront-outline"
+                size={rs(36)}
+                color={colors.primary}
+              />
+            </View>
+
+            <Text
+              style={[
+                styles.announceTitle,
+                {
+                  color: colors.text,
+                  fontSize: fs(rs(16)),
+                  lineHeight: lh(16) * 1.15,
+                },
+              ]}>
+              {t('network.maintenanceTitle')}
+            </Text>
+
+            <Text
+              style={[
+                styles.announceBody,
+                {
+                  color: colors.textMuted,
+                  fontSize: fs(rs(14)),
+                  lineHeight: lh(14) * 1.2,
+                },
+              ]}>
+              {t('network.maintenanceThanks')}
+            </Text>
+
+            <Text
+              style={[
+                styles.announceBody,
+                {
+                  color: colors.textMuted,
+                  fontSize: fs(rs(14)),
+                  lineHeight: lh(14) * 1.2,
+                },
+              ]}>
+              {t('network.maintenanceWish')}
+            </Text>
+
+            <Text
+              style={[
+                styles.announceBody,
+                {
+                  color: colors.textMuted,
+                  fontSize: fs(rs(14)),
+                  lineHeight: lh(14) * 1.2,
+                },
+              ]}>
+              {t('network.maintenanceMerit')}
+            </Text>
+
+            <Text
+              style={[
+                styles.announceSign,
+                {
+                  color: colors.primary,
+                  fontSize: fs(rs(13)),
+                  lineHeight: lh(13),
+                },
+              ]}>
+              {t('network.maintenanceSign')}
+            </Text>
+
+            <Pressable
+              onPress={handleQuit}
+              disabled={isQuitting}
+              style={[
+                styles.announceQuit,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: isQuitting ? 0.7 : 1,
+                },
+              ]}
+              accessibilityRole="button">
+              <Text
+                style={[
+                  styles.announceQuitText,
+                  { color: colors.onPrimary, fontSize: fs(14) },
+                ]}>
+                {isQuitting ? '...' : t('network.quit')}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  const title = t('network.serverDownTitle');
+  const body = t('network.serverDownBody');
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleQuit}>
@@ -65,12 +184,12 @@ export function ServerDownNotice() {
           </View>
 
           <Text style={[styles.title, { color: colors.text, fontSize: fs(rs(17)), lineHeight: lh(17) }]}>
-            {t('network.serverDownTitle')}
+            {title}
           </Text>
 
           <Text
             style={[styles.body, { color: colors.textMuted, fontSize: fs(rs(14)), lineHeight: lh(14) }]}>
-            {t('network.serverDownBody')}
+            {body}
           </Text>
 
           <Text
@@ -113,7 +232,14 @@ export function ServerDownNotice() {
                 },
               ]}
               accessibilityRole="button">
-              <Text style={[styles.actionText, { color: colors.text, fontSize: fs(14) }]}>
+              <Text
+                style={[
+                  styles.actionText,
+                  {
+                    color: colors.text,
+                    fontSize: fs(14),
+                  },
+                ]}>
                 {isQuitting ? '...' : t('network.quit')}
               </Text>
             </Pressable>
@@ -125,6 +251,61 @@ export function ServerDownNotice() {
 }
 
 const styles = StyleSheet.create({
+  announceBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 28,
+  },
+  announceCard: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 22,
+    borderWidth: 1,
+    paddingTop: 36,
+    paddingBottom: 28,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.14,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  announceIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  announceTitle: {
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 22,
+  },
+  announceBody: {
+    fontWeight: '400',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  announceSign: {
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 24,
+  },
+  announceQuit: {
+    width: '100%',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    alignItems: 'center',
+  },
+  announceQuitText: {
+    fontWeight: '700',
+    textAlign: 'center',
+  },
   backdrop: {
     flex: 1,
     justifyContent: 'center',
@@ -161,7 +342,7 @@ const styles = StyleSheet.create({
   body: {
     fontWeight: '500',
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 20,
   },
   tip: {
     fontWeight: '500',

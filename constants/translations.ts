@@ -37,6 +37,12 @@ const en: TranslationTree = {
     serverDownBody: 'QR Shop is temporarily unavailable. Please try again in a moment.',
     serverDownDnsTip:
       'On Atom: Settings → Network → Private DNS → hostname one.one.one.one, then Retry.',
+    maintenanceTitle: 'QR Shop service is temporarily paused.',
+    maintenanceThanks:
+      'Thank you to every friend who has trusted and supported us all along.',
+    maintenanceWish: 'May you all stay safe, at peace, and in good health.',
+    maintenanceMerit: 'May your generosity and merit bring ever-growing blessings.',
+    maintenanceSign: '— QR Shop Team —',
   },
   errors: {
     loadProducts: 'Could not load products. Check your connection and try again.',
@@ -201,7 +207,7 @@ const en: TranslationTree = {
     cancelled: 'Cancelled',
   },
   deliveryStatusHint: {
-    pending: 'We received your order and will start soon.',
+    pending: 'We received your order.',
     preparing: 'We are packing your items for delivery.',
     partial: 'Some items are on the way; the rest will follow.',
     delivered: 'Your items have been delivered.',
@@ -343,9 +349,9 @@ const en: TranslationTree = {
     orderNote: 'Order Note',
     placeOrder: 'Place Order',
     selectDate: 'Tap to select date',
-    successTitle: 'Order placed',
+    successTitle: 'Thank you for your order',
     successMessage:
-      'Thank you! We received your order.\n\n• We will prepare and deliver your items\n• Track status anytime in Orders\n• Call or Viber us from Account → Need help if you need anything',
+      'We have received your order successfully.\n\n• We will carefully prepare and deliver your items\n• You can track your order status anytime in Orders\n• If you need any assistance, please call or Viber us from Account → Need help',
     errorNotSignedIn: 'You are not signed in.',
     errorEmptyCart: 'Your cart is empty.',
     errorUploadScreenshot: 'Please upload your KPay payment screenshot.',
@@ -356,7 +362,7 @@ const en: TranslationTree = {
     errorCheckoutFailed: 'Checkout failed.',
   },
   fulfillment: {
-    howToFulfill: 'How should we fulfill?',
+    howToFulfill: 'Delivery Method',
     selfPickup: 'Self Pickup',
     delivery: 'Delivery',
     deliveryAddress: 'Delivery Address',
@@ -471,6 +477,12 @@ const my: TranslationTree = {
     serverDownBody: 'QR Shop ကို ယာယီ အသုံးပြု၍ မရနိုင်ပါ။ ခဏနေမှ ထပ်မံကြိုးစားပါ။',
     serverDownDnsTip:
       'Atom: Settings → Network → Private DNS → one.one.one.one ထည့်ပြီး ထပ်ကြိုးစားပါ။',
+    maintenanceTitle: 'QR Shop ဝန်ဆောင်မှုကို ယာယီရပ်နားထားပါသည်။',
+    maintenanceThanks:
+      'အစဉ်တစိုက် ယုံကြည်အားပေးခဲ့ကြသော မိတ်ဆွေတစ်ဦးချင်းစီတိုင်းကို ကျေးဇူးအထူးတင်ရှိပါသည်။',
+    maintenanceWish: 'မိတ်ဆွေများအားလုံး ဘေးဘယာကင်းဝေး၍ စိတ်ချမ်းသာ ကိုယ်ကျန်းမာကြပါစေ။',
+    maintenanceMerit: 'အလှူရေစက်၊ ကုသိုလ်ထက်၊ မင်္ဂလာအပေါင်း ဆင့်ပွားပါစေ။',
+    maintenanceSign: '— QR Shop Team —',
   },
   errors: {
     loadProducts: 'ပစ္စည်းများ ဖွင့်၍မရပါ။ အင်တာနက် စစ်ဆေးပြီး ထပ်မံကြိုးစားပါ။',
@@ -491,7 +503,7 @@ const my: TranslationTree = {
     deleteAddress: 'လိပ်စာ ဖျက်၍မရပါ။ ထပ်မံကြိုးစားပါ။',
     loadAddressList: 'သိမ်းထားသော လိပ်စာများ ဖွင့်၍မရပါ။ ထပ်မံကြိုးစားပါ။',
     addressRefreshFailed: 'လိပ်စာ သိမ်းပြီးပါပြီ။ စာရင်းမရပါက အောက်ဆွဲ၍ ပြန်ဖွင့်ပါ။',
-    checkoutFailed: 'ငွေရှင်းမှု မပြီးမြောက်ပါ။ ထပ်မံကြိုးစားပါ။',
+    checkoutFailed: 'အော်ဒါမပြီးမြောက်ပါ။ ထပ်မံကြိုးစားပါ။',
     changePasswordFailed: 'စကားဝှက် ပြောင်း၍မရပါ။ ထပ်မံကြိုးစားပါ။',
     loadNotifications: 'အသိပေးချက်များ ဖွင့်၍မရပါ။ ထပ်မံကြိုးစားပါ။',
     loadMembership: 'အဖွဲ့ဝင်အချက်အလက် ဖွင့်၍မရပါ။ ထပ်မံကြိုးစားပါ။',
@@ -635,7 +647,7 @@ const my: TranslationTree = {
     cancelled: 'ပယ်ဖျက်ပြီး',
   },
   deliveryStatusHint: {
-    pending: 'အော်ဒါ လက်ခံရရှိပါပြီ။ မကြာမီ စတင်ပါမည်။',
+    pending: 'သင့်အော်ဒါကို လက်ခံရရှိပါသည်။',
     preparing: 'ပစ္စည်းများကို ထုပ်ပိုး/ပြင်ဆင်နေပါသည်။',
     partial: 'ပစ္စည်းတချို့ ပို့နေပြီး ကျန်သည် နောက်မှ ရောက်ပါမည်။',
     delivered: 'ပစ္စည်းများ ပို့ဆောင်ပြီးပါပြီ။',
@@ -649,7 +661,7 @@ const my: TranslationTree = {
     memberStatusRegistered: 'မှတ်ပုံတင်အဖွဲ့ဝင်',
     memberStatusPro: 'Pro',
     memberStatusPremium: 'Premium',
-    upgrade: '🎁 အဖွဲ့ဝင်ခံစားခွင့် ရယူပါ',
+    upgrade: '🎁 အဖွဲ့ဝင်အကျိုးခံစားခွင့်များ',
     upgradeUnlockCoupons: 'ကူပွန်နှင့် Commission အကျိုးခံစားခွင့်များ ရယူရန် အဖွဲ့ဝင်အဆင့်ကို မြှင့်တင်ပါ။',
     upgradeChooseTitle: 'အဖွဲ့ဝင်အဆင့် ရွေးချယ်ပါ',
     upgradeCheckInfoTitle: 'သင့်အချက်အလက်များကို စစ်ဆေးပါ',
@@ -730,7 +742,7 @@ const my: TranslationTree = {
     later: 'နောက်မှ',
     thanksTitle: 'ကျေးဇူးတင်ပါသည်!',
     thanksHigh: 'ပေါ်လာသော ပြတင်းတွင် စတိုးသို့ ကြယ်ပေးပါ။',
-    thanksLow: 'အကြံပြုချက်အတွက် ကျေးဇူးတင်ပါသည်။ Account → Need help မှ ဆက်သွယ်နိုင်ပါသည်။',
+    thanksLow: 'အကြံပြုချက်အတွက် ကျေးဇူးတင်ပါသည်။ အကောင့် → အကူအညီ လိုအပ်ပါသလား? မှ ဆက်သွယ်နိုင်ပါသည်။',
   },
   notifications: {
     title: 'အသိပေးချက်များ',
@@ -777,9 +789,9 @@ const my: TranslationTree = {
     orderNote: 'အော်ဒါ မှတ်ချက်',
     placeOrder: 'အော်ဒါတင်မည်',
     selectDate: 'ရက်ရွေးရန် နှိပ်ပါ',
-    successTitle: 'အော်ဒါ တင်ပြီးပါပြီ',
+    successTitle: 'အော်ဒါတင်ခြင်း အောင်မြင်ပါသည်။ ✅',
     successMessage:
-      'ကျေးဇူးတင်ပါသည်။ သင့်အော်ဒါ လက်ခံရရှိပါပြီ။\n\n• ပစ္စည်းများကို ပြင်ဆင်ပြီး ပို့ဆောင်ပေးပါမည်\n• အော်ဒါအခြေအနေကို Orders တွင် ကြည့်နိုင်ပါသည်\n• အကူအညီလိုပါက Account → Need help မှ ဖုန်း/Viber ဆက်သွယ်ပါ',
+      'သင့်အော်ဒါကို လက်ခံရရှိပါပြီ။\n\n• အော်ဒါကို စစ်ဆေးအတည်ပြုပြီး ပို့ဆောင်ရန် စီစဉ်ပေးပါမည်။\n• အော်ဒါအခြေအနေကို အော်ဒါများ တွင် စစ်ဆေးနိုင်ပါသည်။\n• အကူအညီလိုအပ်ပါက အကောင့် → အကူအညီ မှ ဆက်သွယ်နိုင်ပါသည်။\n\nQR Shop ကို ယုံကြည်စွာ အားပေးသည့်အတွက် ကျေးဇူးတင်ပါသည်။',
     errorNotSignedIn: 'သင် အကောင့်ဝင်မထားပါ။',
     errorEmptyCart: 'သင့်စျေးခြင်း ဗလာဖြစ်နေသည်။',
     errorUploadScreenshot: 'KPay ငွေပေးချေမှု ဓာတ်ပုံ တင်ပါ။',
@@ -787,10 +799,10 @@ const my: TranslationTree = {
     errorSelectPickup: 'လာယူမည့်နေရာ တစ်ခု ရွေးပါ။',
     errorSelectContact: 'လာယူမည့် အော်ဒါအတွက် ဆက်သွယ်ရန် လိပ်စာ တစ်ခု ရွေးပါ။',
     errorPhotoPermission: 'ငွေပေးချေမှုအထောက်အထား တင်ရန် ဓာတ်ပုံခွင့်ပြုချက် လိုအပ်သည်။',
-    errorCheckoutFailed: 'ငွေရှင်းမှု မအောင်မြင်ပါ။',
+    errorCheckoutFailed: 'အော်ဒါတင်မရပါ။',
   },
   fulfillment: {
-    howToFulfill: 'ဘယ်လို လက်ခံမလဲ?',
+    howToFulfill: 'ပို့ဆောင်မည့်ပုံစံ',
     selfPickup: 'လာယူမည်',
     delivery: 'ပို့ဆောင်မည်',
     deliveryAddress: 'ပို့ဆောင်ရေးလိပ်စာ',
