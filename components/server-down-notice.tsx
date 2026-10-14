@@ -1,6 +1,6 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppStatus } from '@/contexts/app-status-context';
 import { useLanguage } from '@/contexts/language-context';
@@ -30,6 +30,8 @@ export function ServerDownNotice() {
   const visible =
     !forceUpdateRequired && (maintenance || (serverDown && isOnline));
   const busy = isChecking || isQuitting;
+  // iOS cannot kill the app process — hide Close so it does not look broken.
+  const showQuitButton = Platform.OS !== 'ios';
 
   const handleRetry = async () => {
     if (busy || maintenance) {
@@ -135,25 +137,27 @@ export function ServerDownNotice() {
               {t('network.maintenanceSign')}
             </Text>
 
-            <Pressable
-              onPress={handleQuit}
-              disabled={isQuitting}
-              style={[
-                styles.announceQuit,
-                {
-                  backgroundColor: colors.primary,
-                  opacity: isQuitting ? 0.7 : 1,
-                },
-              ]}
-              accessibilityRole="button">
-              <Text
+            {showQuitButton ? (
+              <Pressable
+                onPress={handleQuit}
+                disabled={isQuitting}
                 style={[
-                  styles.announceQuitText,
-                  { color: colors.onPrimary, fontSize: fs(14) },
-                ]}>
-                {isQuitting ? '...' : t('network.quit')}
-              </Text>
-            </Pressable>
+                  styles.announceQuit,
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: isQuitting ? 0.7 : 1,
+                  },
+                ]}
+                accessibilityRole="button">
+                <Text
+                  style={[
+                    styles.announceQuitText,
+                    { color: colors.onPrimary, fontSize: fs(14) },
+                  ]}>
+                  {isQuitting ? '...' : t('network.quit')}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       </Modal>
@@ -219,30 +223,32 @@ export function ServerDownNotice() {
               </Text>
             </Pressable>
 
-            <Pressable
-              onPress={handleQuit}
-              disabled={isQuitting}
-              style={[
-                styles.actionButton,
-                styles.quitButton,
-                {
-                  borderColor: colors.border,
-                  backgroundColor: colors.inputBg,
-                  opacity: isQuitting ? 0.7 : 1,
-                },
-              ]}
-              accessibilityRole="button">
-              <Text
+            {showQuitButton ? (
+              <Pressable
+                onPress={handleQuit}
+                disabled={isQuitting}
                 style={[
-                  styles.actionText,
+                  styles.actionButton,
+                  styles.quitButton,
                   {
-                    color: colors.text,
-                    fontSize: fs(14),
+                    borderColor: colors.border,
+                    backgroundColor: colors.inputBg,
+                    opacity: isQuitting ? 0.7 : 1,
                   },
-                ]}>
-                {isQuitting ? '...' : t('network.quit')}
-              </Text>
-            </Pressable>
+                ]}
+                accessibilityRole="button">
+                <Text
+                  style={[
+                    styles.actionText,
+                    {
+                      color: colors.text,
+                      fontSize: fs(14),
+                    },
+                  ]}>
+                  {isQuitting ? '...' : t('network.quit')}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       </View>
