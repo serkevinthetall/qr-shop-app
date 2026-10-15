@@ -38,13 +38,7 @@ const en: TranslationTree = {
     serverDownBody: 'QR Shop is temporarily unavailable. Please try again in a moment.',
     serverDownDnsTip:
       'On Atom: Settings → Network → Private DNS → hostname one.one.one.one, then Retry.',
-    maintenanceTitle: 'QR Shop service is temporarily paused.',
-    maintenanceThanks:
-      'Thank you to every friend who has trusted and supported us all along.',
-    maintenanceWish: 'May you all stay safe, at peace, and in good health.',
-    maintenanceMerit:
-      'May the water of generosity and your merit bring ever-growing blessings.',
-    maintenanceSign: '— QR Shop Team —',
+    maintenanceTitle: 'Server is on maintenance',
   },
   errors: {
     loadProducts: 'Could not load products. Check your connection and try again.',
@@ -479,12 +473,7 @@ const my: TranslationTree = {
     serverDownBody: 'QR Shop ကို ယာယီ အသုံးပြု၍ မရနိုင်ပါ။ ခဏနေမှ ထပ်မံကြိုးစားပါ။',
     serverDownDnsTip:
       'Atom: Settings → Network → Private DNS → one.one.one.one ထည့်ပြီး ထပ်ကြိုးစားပါ။',
-    maintenanceTitle: 'QR Shop ဝန်ဆောင်မှုကို ယာယီရပ်နားထားပါသည်။',
-    maintenanceThanks:
-      'အစဉ်တစိုက် ယုံကြည်အားပေးခဲ့ကြသော မိတ်ဆွေတစ်ဦးချင်းစီတိုင်းကို ကျေးဇူးအထူးတင်ရှိပါသည်။',
-    maintenanceWish: 'မိတ်ဆွေများအားလုံး ဘေးဘယာကင်းဝေး၍ စိတ်ချမ်းသာ ကိုယ်ကျန်းမာကြပါစေ။',
-    maintenanceMerit: 'အလှူရေစက်၊ ကုသိုလ်ထက်၊ မင်္ဂလာအပေါင်း ဆင့်ပွားပါစေ။',
-    maintenanceSign: '— QR Shop Team —',
+    maintenanceTitle: 'ဆာဗာပြုပြင်နေပါသည်',
   },
   errors: {
     loadProducts: 'ပစ္စည်းများ ဖွင့်၍မရပါ။ အင်တာနက် စစ်ဆေးပြီး ထပ်မံကြိုးစားပါ။',

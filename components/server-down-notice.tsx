@@ -98,7 +98,7 @@ export function ServerDownNotice() {
 
             <View style={[styles.announceIconWrap, { backgroundColor: colors.primaryMuted }]}>
               <MaterialCommunityIcons
-                name="storefront-outline"
+                name="server-outline"
                 size={rs(36)}
                 color={colors.primary}
               />
@@ -109,59 +109,11 @@ export function ServerDownNotice() {
                 styles.announceTitle,
                 {
                   color: colors.text,
-                  fontSize: fs(rs(16)),
-                  lineHeight: lh(16),
+                  fontSize: fs(rs(17)),
+                  lineHeight: lh(17),
                 },
               ]}>
               {t('network.maintenanceTitle')}
-            </Text>
-
-            <Text
-              style={[
-                styles.announceBody,
-                {
-                  color: colors.textMuted,
-                  fontSize: fs(rs(14)),
-                  lineHeight: lh(14),
-                },
-              ]}>
-              {t('network.maintenanceThanks')}
-            </Text>
-
-            <Text
-              style={[
-                styles.announceBody,
-                {
-                  color: colors.textMuted,
-                  fontSize: fs(rs(14)),
-                  lineHeight: lh(14),
-                },
-              ]}>
-              {t('network.maintenanceWish')}
-            </Text>
-
-            <Text
-              style={[
-                styles.announceBody,
-                {
-                  color: colors.textMuted,
-                  fontSize: fs(rs(14)),
-                  lineHeight: lh(14),
-                },
-              ]}>
-              {t('network.maintenanceMerit')}
-            </Text>
-
-            <Text
-              style={[
-                styles.announceSign,
-                {
-                  color: colors.primary,
-                  fontSize: fs(rs(13)),
-                  lineHeight: lh(13),
-                },
-              ]}>
-              {t('network.maintenanceSign')}
             </Text>
 
             {showQuitButton ? (
@@ -322,18 +274,7 @@ const styles = StyleSheet.create({
   announceTitle: {
     fontWeight: '700',
     textAlign: 'center',
-    marginBottom: 18,
-  },
-  announceBody: {
-    fontWeight: '400',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  announceSign: {
-    fontWeight: '600',
-    textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 24,
+    marginBottom: 28,
   },
   announceQuit: {
     width: '100%',
