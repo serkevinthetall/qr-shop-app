@@ -2,7 +2,7 @@
   "expo": {
     "name": "QR Shop",
     "slug": "qr-shop-app",
-    "version": "1.4.3",
+    "version": "1.4.6",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "qrapp",
@@ -14,13 +14,18 @@
       "appStoreUrl": "https://apps.apple.com/app/id6800218923",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": ["viber", "fb", "tel", "itms-apps"]
+        "LSApplicationQueriesSchemes": [
+          "viber",
+          "fb",
+          "tel",
+          "itms-apps"
+        ]
       },
-      "buildNumber": "24"
+      "buildNumber": "29"
     },
     "android": {
       "package": "com.qrshop.myanmar",
-      "versionCode": 26,
+      "versionCode": 31,
       "playStoreUrl": "https://play.google.com/store/apps/details?id=com.qrshop.myanmar",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
@@ -62,7 +67,11 @@
             "enableShrinkResourcesInReleaseBuilds": true,
             "extraProguardRules": "-keep class io.invertase.firebase.** { *; }\n-keep class com.google.firebase.** { *; }\n-keep class com.google.android.gms.** { *; }\n-dontwarn com.google.firebase.**\n-dontwarn com.google.android.gms.**\n-keep class com.qrshop.myanmar.network.** { *; }\n-keepclassmembers class com.qrshop.myanmar.network.** { *; }",
             "manifestQueries": {
-              "package": ["com.viber.voip", "com.facebook.katana", "com.facebook.lite"]
+              "package": [
+                "com.viber.voip",
+                "com.facebook.katana",
+                "com.facebook.lite"
+              ]
             }
           }
         }

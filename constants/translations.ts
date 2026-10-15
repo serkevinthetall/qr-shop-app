@@ -1,5 +1,6 @@
 export type Language = 'my' | 'en';
 
+/** App launches in Myanmar unless the user has saved another preference. */
 export const DEFAULT_LANGUAGE: Language = 'my';
 
 type TranslationTree = {
@@ -41,7 +42,8 @@ const en: TranslationTree = {
     maintenanceThanks:
       'Thank you to every friend who has trusted and supported us all along.',
     maintenanceWish: 'May you all stay safe, at peace, and in good health.',
-    maintenanceMerit: 'May your generosity and merit bring ever-growing blessings.',
+    maintenanceMerit:
+      'May the water of generosity and your merit bring ever-growing blessings.',
     maintenanceSign: '— QR Shop Team —',
   },
   errors: {

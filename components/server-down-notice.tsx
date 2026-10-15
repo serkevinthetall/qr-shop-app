@@ -1,7 +1,8 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { LanguageToggleChip } from '@/components/language-toggle-chip';
 import { useAppStatus } from '@/contexts/app-status-context';
 import { useLanguage } from '@/contexts/language-context';
 import { useNetwork } from '@/contexts/network-context';
@@ -16,7 +17,7 @@ import { exitAppProcess } from '@/utils/quit-app';
 export function ServerDownNotice() {
   const colors = useAppColors();
   const { rs } = useResponsive();
-  const { t, fs, lh } = useLanguage();
+  const { t, fs, lh, language, setLanguage } = useLanguage();
   const { isOnline } = useNetwork();
   const {
     maintenance,
@@ -26,12 +27,28 @@ export function ServerDownNotice() {
     refreshStatus,
   } = useAppStatus();
   const [isQuitting, setIsQuitting] = useState(false);
+  const forcedMyanmarRef = useRef(false);
 
   const visible =
     !forceUpdateRequired && (maintenance || (serverDown && isOnline));
   const busy = isChecking || isQuitting;
   // iOS cannot kill the app process — hide Close so it does not look broken.
   const showQuitButton = Platform.OS !== 'ios';
+
+  // Maintenance announcement always opens in Myanmar first; chip can switch after.
+  useEffect(() => {
+    if (!maintenance || !visible) {
+      forcedMyanmarRef.current = false;
+      return;
+    }
+
+    if (!forcedMyanmarRef.current) {
+      forcedMyanmarRef.current = true;
+      if (language !== 'my') {
+        setLanguage('my');
+      }
+    }
+  }, [maintenance, visible, language, setLanguage]);
 
   const handleRetry = async () => {
     if (busy || maintenance) {
@@ -69,6 +86,16 @@ export function ServerDownNotice() {
                 shadowColor: colors.shadow,
               },
             ]}>
+            <LanguageToggleChip
+              style={[
+                styles.languageChip,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                },
+              ]}
+            />
+
             <View style={[styles.announceIconWrap, { backgroundColor: colors.primaryMuted }]}>
               <MaterialCommunityIcons
                 name="storefront-outline"
@@ -83,7 +110,7 @@ export function ServerDownNotice() {
                 {
                   color: colors.text,
                   fontSize: fs(rs(16)),
-                  lineHeight: lh(16) * 1.15,
+                  lineHeight: lh(16),
                 },
               ]}>
               {t('network.maintenanceTitle')}
@@ -95,7 +122,7 @@ export function ServerDownNotice() {
                 {
                   color: colors.textMuted,
                   fontSize: fs(rs(14)),
-                  lineHeight: lh(14) * 1.2,
+                  lineHeight: lh(14),
                 },
               ]}>
               {t('network.maintenanceThanks')}
@@ -107,7 +134,7 @@ export function ServerDownNotice() {
                 {
                   color: colors.textMuted,
                   fontSize: fs(rs(14)),
-                  lineHeight: lh(14) * 1.2,
+                  lineHeight: lh(14),
                 },
               ]}>
               {t('network.maintenanceWish')}
@@ -119,7 +146,7 @@ export function ServerDownNotice() {
                 {
                   color: colors.textMuted,
                   fontSize: fs(rs(14)),
-                  lineHeight: lh(14) * 1.2,
+                  lineHeight: lh(14),
                 },
               ]}>
               {t('network.maintenanceMerit')}
@@ -272,10 +299,17 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     paddingHorizontal: 28,
     alignItems: 'center',
+    position: 'relative',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.14,
     shadowRadius: 20,
     elevation: 8,
+  },
+  languageChip: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 1,
   },
   announceIconWrap: {
     width: 72,
@@ -288,12 +322,12 @@ const styles = StyleSheet.create({
   announceTitle: {
     fontWeight: '700',
     textAlign: 'center',
-    marginBottom: 22,
+    marginBottom: 18,
   },
   announceBody: {
     fontWeight: '400',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   announceSign: {
     fontWeight: '600',
