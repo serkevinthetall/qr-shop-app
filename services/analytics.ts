@@ -70,7 +70,7 @@ export async function trackAppOpen() {
 }
 
 export async function trackLoginSuccess(params: {
-  userId: number;
+  userId: string | number;
   loginType: 'email' | 'phone';
 }) {
   const analytics = getAnalytics();

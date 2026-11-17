@@ -35,7 +35,7 @@ import {
 } from '@/contexts/liquid-tab-bar-visibility';
 import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
-import { isLiquidUiEnabled, liquidGlassFill } from '@/utils/liquid-ui';
+import { isLiquidUiEnabled, liquidGlassFill, tabScreenBottomPadding } from '@/utils/liquid-ui';
 import { takeCatalogBootstrap } from '@/services/catalog-bootstrap';
 import { getUserFacingError } from '@/services/auth-error';
 import { onCatalogRefreshRequested } from '@/services/catalog-events';
@@ -71,7 +71,8 @@ export default function ProductsScreen() {
   const colors = useAppColors();
   const { isDark } = useThemeMode();
   const insets = useSafeAreaInsets();
-  const { rs, horizontalPadding, gridColumns, gridGap, width } = useResponsive();
+  const { rs, horizontalPadding, gridColumns, gridGap, width, isWebsiteLayout, contentMaxWidth } =
+    useResponsive();
   const { token } = useAuth();
   const { syncPricesFromProducts } = useCart();
   const { t, lh, language } = useLanguage();
@@ -415,7 +416,7 @@ export default function ProductsScreen() {
   }, [filterProductsLocally, syncPricesFromProducts]);
 
   const applyPriceUpdates = useCallback(
-    (prices: Array<{ id: number; list_price: number }>) => {
+    (prices: Array<{ id: string; list_price: number }>) => {
       if (!prices.length) {
         return;
       }
@@ -701,14 +702,17 @@ export default function ProductsScreen() {
   return (
     <SafeAreaView
       style={[styles.screen, { backgroundColor: colors.background }]}
-      edges={liquid ? [] : ['top']}>
+      edges={liquid || isWebsiteLayout ? [] : ['top']}>
       {/* 1 — Search stays fixed above; products never go under it */}
       <View
         style={[
           styles.searchSection,
           {
             paddingHorizontal: horizontalPadding,
-            paddingTop: (liquid ? insets.top : 0) + 8,
+            paddingTop: isWebsiteLayout ? 12 : (liquid ? insets.top : 0) + 8,
+            maxWidth: isWebsiteLayout ? contentMaxWidth : undefined,
+            alignSelf: isWebsiteLayout ? 'center' : undefined,
+            width: isWebsiteLayout ? '100%' : undefined,
             backgroundColor: colors.background,
           },
         ]}>
@@ -752,7 +756,8 @@ export default function ProductsScreen() {
             accessibilityLabel={viewMode === 'grid' ? t('products.viewList') : t('products.viewGrid')}
             style={headerControlStyle}
           />
-          <LanguageToggleChip style={headerControlStyle} />
+          {/* Language toggle lives in WebsiteHeader on wide browser. */}
+          {isWebsiteLayout ? null : <LanguageToggleChip style={headerControlStyle} />}
         </View>
         {error ? (
           <InlineErrorBanner
@@ -768,7 +773,12 @@ export default function ProductsScreen() {
 
       {/* Products fill the rest; chip bar floats on top so cards scroll under chips only */}
       <View
-        style={styles.listArea}
+        style={[
+          styles.listArea,
+          isWebsiteLayout
+            ? { maxWidth: contentMaxWidth, alignSelf: 'center', width: '100%' }
+            : null,
+        ]}
         onLayout={(event) => {
           const next = Math.round(event.nativeEvent.layout.height);
           if (next > 0 && next !== listAreaHeight) {
@@ -778,7 +788,7 @@ export default function ProductsScreen() {
         <FlatList
           ref={listRef}
           data={products}
-          key={`${viewMode}-${numColumns}`}
+          key={`${viewMode}-${numColumns}-${isWebsiteLayout ? 'web' : 'app'}`}
           keyExtractor={(item) => String(item.id)}
           numColumns={numColumns}
           style={styles.productsList}
@@ -992,7 +1002,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   listContent: {
-    paddingBottom: 120,
+    paddingBottom: tabScreenBottomPadding(),
     flexGrow: 1,
   },
   centerLoading: {

@@ -1,7 +1,7 @@
 export type OdooRef = [number, string] | false;
 
 export type Address = {
-  id: number;
+  id: string;
   name: string;
   phone: string | false;
   street: string | false;
@@ -12,6 +12,7 @@ export type Address = {
   country_id: OdooRef;
   type?: string;
   parent_id: OdooRef;
+  isDefault?: boolean;
 };
 
 export function isDeliveryChild(address: Address) {
@@ -49,7 +50,7 @@ export function canEditAddress(address: Address, mainAddress?: Address | null) {
 }
 
 export type AddressState = {
-  id: number;
+  id: string;
   name: string;
   code?: string | false;
 };
@@ -61,14 +62,10 @@ export type AddressMeta = {
 
 export type CreateAddressPayload = {
   name: string;
-  phone: string;
+  phone?: string;
   street: string;
-  street2?: string;
-  city: string;
-  zip: string;
-  country_id: number;
-  state_id?: number;
-  state?: string;
+  townshipId: string;
+  isDefault?: boolean;
 };
 
 export function formatAddressLine(address: Address) {
@@ -121,6 +118,7 @@ export function formatAddressDetails(address: Address) {
 
 export function getMainAddress(addresses: Address[]) {
   return (
+    addresses.find((address) => address.isDefault) ??
     addresses.find((address) => !Array.isArray(address.parent_id) || !address.parent_id[0]) ??
     null
   );

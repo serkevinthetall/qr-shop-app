@@ -25,18 +25,19 @@ export function useReorder() {
   const { token } = useAuth();
   const { addToCart } = useCart();
   const { t } = useLanguage();
-  const [reorderingId, setReorderingId] = useState<number | null>(null);
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
 
   const reorder = useCallback(
-    async (orderId: number, preloadedLines?: OrderLine[]) => {
+    async (orderId: string | number, preloadedLines?: OrderLine[]) => {
       if (!token || reorderingId !== null) {
         return;
       }
 
-      setReorderingId(orderId);
+      const id = String(orderId);
+      setReorderingId(id);
 
       try {
-        const lines = preloadedLines ?? (await fetchOrderById(token, orderId)).lines;
+        const lines = preloadedLines ?? (await fetchOrderById(token, id)).lines;
 
         lines
           .filter((line) => Array.isArray(line.product_id) && line.product_uom_qty > 0)

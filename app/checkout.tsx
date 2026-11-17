@@ -3,30 +3,30 @@ import { useRouter, type Href } from 'expo-router';
 // import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  findNodeHandle,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  UIManager,
-  View,
+    findNodeHandle,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    UIManager,
+    View,
 } from 'react-native';
-import { Button, Checkbox, HelperText, RadioButton } from 'react-native-paper';
+import { Button, HelperText, RadioButton } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import {
-  FulfillmentCheckoutSection,
-  type FulfillmentCheckoutHandle,
-} from '@/components/checkout/fulfillment-section';
-import type { FulfillmentMethod } from '@/types/pickup-point';
-import { DatePickerField } from '@/components/date-picker-field';
 import { CelebrationBurst } from '@/components/celebration-burst';
+import {
+    FulfillmentCheckoutSection,
+    type FulfillmentCheckoutHandle,
+} from '@/components/checkout/fulfillment-section';
+import { DatePickerField } from '@/components/date-picker-field';
 import { DetailHeaderBar } from '@/components/detail-header-bar';
 import { InlineErrorBanner } from '@/components/inline-error-banner';
 import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
+import { OrderSuccessModal } from '@/components/order-success-modal';
+import type { FulfillmentMethod } from '@/types/pickup-point';
 // const KPAY_QR_IMAGE = require('@/assets/images/kpay-qr.png');
 import { MYANMAR_FONTS } from '@/constants/fonts';
 import { inputCaretProps } from '@/constants/text-input';
@@ -35,19 +35,12 @@ import { useCart } from '@/contexts/cart-context';
 import { useLanguage } from '@/contexts/language-context';
 import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
+import { fetchAddresses } from '@/services/address-api';
 import { getUserFacingError } from '@/services/auth-error';
 import { checkoutOrder } from '@/services/order-api';
-import { fetchMembership, fetchMembershipCoupons } from '@/services/membership-api';
-import {
-  getCouponEligibilityMessage,
-  getCurrentCoupon,
-  isCouponAvailable,
-  isCouponStatusAvailable,
-  isOrderTotalEligibleForCoupon,
-} from '@/types/membership';
-import type { Membership, MembershipCoupon } from '@/types/membership';
-import { formatPrice } from '@/types/product';
 import { openStoreReviewPage, shouldAutoPromptStoreRating } from '@/services/store-review';
+import { formatAddressLine } from '@/types/address';
+import { formatPrice } from '@/types/product';
 import { hapticSuccess } from '@/utils/haptics';
 import { isLiquidUiEnabled } from '@/utils/liquid-ui';
 
@@ -60,14 +53,14 @@ export default function CheckoutScreen() {
   const { isDark } = useThemeMode();
   const insets = useSafeAreaInsets();
   const { rs, horizontalPadding, contentMaxWidth } = useResponsive();
-  const { token } = useAuth();
-  const { items, productItems, totalAmount, deliveryFeeAmount, isDeliveryFeeLoading, clearCart, syncDeliveryFee } = useCart();
+  const { token, user } = useAuth();
+  const { productItems, totalAmount, deliveryFeeAmount, isDeliveryFeeLoading, clearCart, syncDeliveryFee } = useCart();
   const { language, t, fs, lh } = useLanguage();
   const liquid = isLiquidUiEnabled();
   const fulfillmentRef = useRef<FulfillmentCheckoutHandle>(null);
   const scrollRef = useRef<ScrollView>(null);
   const notesFieldRef = useRef<View>(null);
-  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [fulfillmentMethod, setFulfillmentMethod] = useState<FulfillmentMethod>('delivery');
 
   const deliveryFeeLabel = useMemo(() => {
@@ -101,7 +94,7 @@ export default function CheckoutScreen() {
   );
 
   const handleAddressSelectionChange = useCallback(
-    (addressId: number | null) => {
+    (addressId: string | null) => {
       setSelectedAddressId(addressId);
       if (fulfillmentMethod !== 'delivery') {
         return;
@@ -119,16 +112,14 @@ export default function CheckoutScreen() {
     void syncDeliveryFee({ mode: 'delivery' });
   }, [syncDeliveryFee]);
 
-  const [membership, setMembership] = useState<Membership | null>(null);
-  const [availableCoupon, setAvailableCoupon] = useState<MembershipCoupon | null>(null);
-  const [useCoupon, setUseCoupon] = useState(false);
-
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cod');
   const [preferredDeliveryDate, setPreferredDeliveryDate] = useState('');
   const [deliveryNotes, setDeliveryNotes] = useState('');
   // const [screenshotUri, setScreenshotUri] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [showCelebration, setShowCelebration] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [promptStoreRating, setPromptStoreRating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const today = useMemo(() => new Date(), []);
@@ -158,55 +149,6 @@ export default function CheckoutScreen() {
     }, delay);
   }, []);
 
-  useEffect(() => {
-    if (!token) {
-      return;
-    }
-
-    Promise.all([fetchMembership(token), fetchMembershipCoupons(token)])
-      .then(([membershipResult, coupons]) => {
-        setMembership(membershipResult.membership);
-        setAvailableCoupon(getCurrentCoupon(coupons, membershipResult.membership));
-        setUseCoupon(false);
-      })
-      .catch(() => {
-        // Coupon is optional at checkout.
-      });
-  }, [token]);
-
-  const couponAvailable = availableCoupon
-    ? isCouponAvailable(availableCoupon, membership)
-    : false;
-
-  const couponTooLow =
-    !!availableCoupon &&
-    couponAvailable &&
-    !isOrderTotalEligibleForCoupon(totalAmount, availableCoupon.x_studio_coupon_amount);
-
-  useEffect(() => {
-    if (couponTooLow && useCoupon) {
-      setUseCoupon(false);
-    }
-  }, [couponTooLow, useCoupon]);
-
-  const couponHint = (() => {
-    if (!availableCoupon) {
-      return t('checkout.couponHintNone');
-    }
-
-    if (couponAvailable) {
-      return useCoupon
-        ? t('checkout.couponHintApply')
-        : t('checkout.couponHintSelect');
-    }
-
-    if (isCouponStatusAvailable(availableCoupon) && membership) {
-      return getCouponEligibilityMessage(membership.x_studio_membership_level);
-    }
-
-    return availableCoupon.x_studio_status;
-  })();
-
   /*
   const pickScreenshot = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -234,7 +176,7 @@ export default function CheckoutScreen() {
       return;
     }
 
-    if (!items.length) {
+    if (!productItems.length) {
       setError(t('checkout.errorEmptyCart'));
       return;
     }
@@ -245,11 +187,6 @@ export default function CheckoutScreen() {
       return;
     }
     */
-
-    if (useCoupon && couponTooLow) {
-      setError(t('checkout.couponTooLow'));
-      return;
-    }
 
     setError('');
     setIsSubmitting(true);
@@ -265,47 +202,39 @@ export default function CheckoutScreen() {
         );
       }
 
+      const addresses = await fetchAddresses(token);
+      const selected = addresses.find((a) => a.id === String(selection.addressId));
+      const addressText = selected
+        ? formatAddressLine(selected) || String(selected.street || selected.city || '')
+        : '';
+      const townshipId = selected?.zip ? String(selected.zip) : undefined;
+
       await checkoutOrder(token, {
         paymentMethod,
         preferredDeliveryDate,
         deliveryNotes,
         fulfillmentMethod: selection.fulfillmentMethod,
-        // Odoo always needs a Contact delivery location on the SO.
         addressId: String(selection.addressId),
+        addressText: addressText || undefined,
+        townshipId,
+        buyerName: user?.name || undefined,
+        buyerPhone: user?.phone || user?.login || undefined,
         pickupPointId:
           selection.fulfillmentMethod === 'pickup' ? String(selection.pickupPointId) : '',
-        couponCode: useCoupon && couponAvailable ? availableCoupon!.x_studio_coupon_code : '',
-        items: items.map((item) => ({
-          product_id: item.product.id,
+        items: productItems.map((item) => ({
+          product_id: String(item.product.id),
           quantity: item.quantity,
+          shop_id: item.product.shopId,
+          sku_id: item.product.productId,
         })),
-        /*
-        paymentScreenshot:
-          paymentMethod === 'wire_transfer' && screenshotUri
-            ? {
-                uri: screenshotUri,
-                name: 'payment_screenshot.jpg',
-                type: 'image/jpeg',
-              }
-            : undefined,
-        */
       });
 
       clearCart();
       hapticSuccess();
       setShowCelebration(true);
       const canAskRating = await shouldAutoPromptStoreRating();
-      Alert.alert(t('checkout.successTitle'), t('checkout.successMessage'), [
-        {
-          text: t('common.done'),
-          onPress: () => {
-            if (canAskRating) {
-              void openStoreReviewPage();
-            }
-            router.replace('/(tabs)/orders' as Href);
-          },
-        },
-      ]);
+      setPromptStoreRating(canAskRating);
+      setShowSuccessModal(true);
     } catch (err) {
       const message = getUserFacingError(err, t('errors.checkoutFailed'), t);
       if (message) setError(message);
@@ -392,78 +321,6 @@ export default function CheckoutScreen() {
             onAddressSelectionChange={handleAddressSelectionChange}
           />
         ) : null}
-
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.cardTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16) }]}>{t('checkout.couponCode')}</Text>
-
-          <View
-            style={[
-              styles.couponBox,
-              {
-                backgroundColor: couponAvailable ? colors.successBg : colors.dangerBg,
-                borderColor: couponAvailable ? colors.success : colors.danger,
-              },
-            ]}>
-            <Text
-              style={[
-                styles.couponCode,
-                { color: couponAvailable ? colors.success : colors.danger, fontSize: fs(rs(16)), lineHeight: lh(16) },
-              ]}>
-              {availableCoupon?.x_studio_coupon_code ?? t('checkout.noCoupon')}
-            </Text>
-            {availableCoupon ? (
-              <Text style={[styles.couponAmount, { color: colors.textMuted, fontSize: fs(rs(12)), lineHeight: lh(12) }]}>
-                {t('checkout.amount')}: {formatPrice(availableCoupon.x_studio_coupon_amount)}
-              </Text>
-            ) : null}
-            {availableCoupon ? (
-              <Text style={[styles.couponAmount, { color: colors.textMuted, fontSize: fs(rs(12)), lineHeight: lh(12) }]}>
-                {t('checkout.status')}: {availableCoupon.x_studio_status}
-              </Text>
-            ) : null}
-          </View>
-
-          {couponAvailable ? (
-            <Pressable
-              onPress={() => {
-                if (couponTooLow) {
-                  return;
-                }
-                setUseCoupon((current) => !current);
-              }}
-              style={[styles.couponSelectRow, couponTooLow && styles.couponSelectRowDisabled]}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: useCoupon, disabled: couponTooLow }}>
-              <Checkbox.Android
-                status={useCoupon ? 'checked' : 'unchecked'}
-                disabled={couponTooLow}
-                color={colors.primary}
-                uncheckedColor={colors.textMuted}
-                onPress={() => {
-                  if (couponTooLow) {
-                    return;
-                  }
-                  setUseCoupon((current) => !current);
-                }}
-              />
-              <Text style={[styles.couponSelectLabel, { color: colors.text, fontSize: fs(rs(14)), lineHeight: lh(14) }]}>
-                {t('checkout.useCoupon')}
-              </Text>
-            </Pressable>
-          ) : null}
-
-          {couponTooLow ? (
-            <HelperText type="info" visible>
-              {t('checkout.couponMinOrder', {
-                amount: formatPrice(availableCoupon!.x_studio_coupon_amount),
-              })}
-            </HelperText>
-          ) : (
-            <HelperText type="info" visible>
-              {couponHint}
-            </HelperText>
-          )}
-        </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.cardTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16) }]}>{t('checkout.paymentMethod')}</Text>
@@ -566,11 +423,22 @@ export default function CheckoutScreen() {
           mode="contained"
           onPress={handleCheckout}
           loading={isSubmitting}
-          disabled={isSubmitting || (useCoupon && couponTooLow)}
+          disabled={isSubmitting}
           contentStyle={styles.submitButton}>
           {t('checkout.placeOrder')}
         </Button>
       </KeyboardAwareScrollView>
+
+      <OrderSuccessModal
+        visible={showSuccessModal}
+        onDone={() => {
+          setShowSuccessModal(false);
+          if (promptStoreRating) {
+            void openStoreReviewPage();
+          }
+          router.replace('/(tabs)/orders' as Href);
+        }}
+      />
 
       <CelebrationBurst active={showCelebration} onFinished={() => setShowCelebration(false)} />
     </SafeAreaView>

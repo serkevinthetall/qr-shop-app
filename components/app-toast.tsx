@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MYANMAR_FONTS } from '@/constants/fonts';
 import { useLanguage } from '@/contexts/language-context';
-import { liquidTabBarClearance } from '@/utils/liquid-ui';
+import { isLiquidTabBarEnabled, liquidTabBarClearance } from '@/utils/liquid-ui';
 
 type AppToastProps = {
   message: string;
@@ -127,9 +127,11 @@ export function AppToast({ bottomOffset = 8, ...props }: AppToastProps) {
 
 export function TabAppToast({ bottomOffset = 12, ...props }: AppToastProps) {
   const insets = useSafeAreaInsets();
-  const clearance = liquidTabBarClearance(insets.bottom);
-  const bottom =
-    (clearance > 0 ? clearance : Math.max(insets.bottom, 8)) + bottomOffset;
+  // Liquid iOS: tab pill overlays content — clear it.
+  // Android / flat iOS: screen already sits above the tab bar — small gap only.
+  const bottom = isLiquidTabBarEnabled()
+    ? liquidTabBarClearance(insets.bottom) + bottomOffset
+    : bottomOffset;
 
   return <AppToastInner {...props} bottom={bottom} />;
 }

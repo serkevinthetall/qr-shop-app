@@ -9,10 +9,10 @@ if (!primary) {
   );
 }
 
-/** Primary API (Vercel / www.qrshop.online). */
+/** Primary API — QR Shop Platform API. */
 export const API_BASE_URL = primary;
 
-/** Secondary API (Netlify). Empty when unset. */
+/** Optional secondary host. Empty when unset (Platform-only). */
 export const API_FALLBACK_URL = fallback;
 
 const PREFERRED_API_BASE_KEY = 'qrshop.preferredApiBase';

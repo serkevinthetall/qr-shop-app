@@ -8,7 +8,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://qr-shop-app-backend.vercel.app"
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.qrshopmyanmar.com"
       }
     },
     "preview": {
@@ -17,7 +17,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://qr-shop-app-backend.vercel.app"
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.qrshopmyanmar.com"
       }
     },
     "local-apk": {
@@ -27,8 +27,7 @@
         "gradleCommand": ":app:assembleRelease -x lint -x lintVitalAnalyzeRelease -x lintVitalReportRelease -x lintVitalRelease"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://www.qrshop.online",
-        "EXPO_PUBLIC_API_FALLBACK_URL": "https://qr-shop-app-backend.vercel.app",
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.qrshopmyanmar.com",
         "ORG_GRADLE_JVMARGS": "-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8"
       }
     },
@@ -40,8 +39,7 @@
         "gradleCommand": ":app:bundleRelease -x lint -x lintVitalAnalyzeRelease -x lintVitalReportRelease -x lintVitalRelease"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://www.qrshop.online",
-        "EXPO_PUBLIC_API_FALLBACK_URL": "https://qr-shop-app-backend.vercel.app",
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.qrshopmyanmar.com",
         "ORG_GRADLE_JVMARGS": "-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8"
       }
     },
@@ -54,8 +52,17 @@
         "resourceClass": "m-medium"
       },
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://www.qrshop.online",
-        "EXPO_PUBLIC_API_FALLBACK_URL": "https://qr-shop-app-backend.vercel.app"
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.qrshopmyanmar.com"
+      }
+    },
+    "ios-1.0.0": {
+      "distribution": "store",
+      "autoIncrement": false,
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.qrshopmyanmar.com"
       }
     }
   },

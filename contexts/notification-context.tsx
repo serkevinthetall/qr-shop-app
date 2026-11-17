@@ -32,7 +32,9 @@ function describeNotification(item: AppNotification, language: Language) {
 
   return {
     title: translate(language, 'notifications.newCouponTitle'),
-    body: translate(language, 'notifications.newCouponBody', { code: item.coupon_code }),
+    body: translate(language, 'notifications.newCouponBody', {
+      code: item.coupon_code || '',
+    }),
   };
 }
 

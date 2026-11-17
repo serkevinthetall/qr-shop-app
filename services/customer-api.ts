@@ -1,72 +1,52 @@
 import { apiRequest } from '@/services/api-client';
 import { throwIfUnauthorized } from '@/services/auth-error';
 import { getApiFallbackMessage } from '@/services/network-error';
-
-type ApiErrorResponse = {
-  success: false;
-  message: string;
-};
+import {
+  platformErrorMessage,
+  unwrapPlatformData,
+} from '@/services/platform-envelope';
 
 export type CustomerProfile = {
-  id: number;
+  id: string;
   name: string;
   email: string;
   phone: string;
+  /** Unused on Platform — kept empty for older UI. */
   tags: string[];
 };
 
-type ProfileResponse = {
-  success: true;
-  profile: {
-    id: number;
-    name?: string | false;
-    email?: string | false;
-    phone?: string | false;
-    tags?: string[];
-  } | null;
+type MePayload = {
+  user?: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  };
 };
 
-function getApiError(data: { success: boolean; message?: string } | null, fallback: string) {
-  if (data && 'message' in data && data.message) {
-    return data.message;
-  }
-
-  return fallback;
-}
-
-function asText(value: string | false | undefined) {
-  if (typeof value !== 'string') {
-    return '';
-  }
-
-  return value.trim();
-}
-
 export async function fetchCustomerProfile(token: string): Promise<CustomerProfile | null> {
-  const { response, data } = await apiRequest<ProfileResponse | ApiErrorResponse>(
-    '/api/customer/profile',
-    { token },
-  );
+  const { response, data } = await apiRequest<unknown>('/api/auth/me', { token });
 
   throwIfUnauthorized(response);
-  if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, getApiFallbackMessage('loadProfile')));
+  if (!response.ok) {
+    throw new Error(platformErrorMessage(data, getApiFallbackMessage('loadProfile')));
   }
 
-  if (!data.profile) {
+  const payload = unwrapPlatformData<MePayload>(data);
+  const user = payload?.user;
+  if (!user) {
     return null;
   }
 
   return {
-    id: data.profile.id,
-    name: asText(data.profile.name),
-    email: asText(data.profile.email),
-    phone: asText(data.profile.phone),
-    tags: Array.isArray(data.profile.tags) ? data.profile.tags : [],
+    id: String(user.id),
+    name: String(user.name || '').trim(),
+    email: String(user.email || '').trim(),
+    phone: String(user.phone || '').trim(),
+    tags: [],
   };
 }
 
-export async function fetchPartnerTags(token: string) {
-  const profile = await fetchCustomerProfile(token);
-  return profile?.tags ?? [];
+export async function fetchPartnerTags(_token: string) {
+  return [] as string[];
 }

@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HapticTab } from '@/components/haptic-tab';
+import { WebsiteHeader } from '@/components/web/website-header';
 import { useAuth } from '@/contexts/auth-context';
 import { useCart } from '@/contexts/cart-context';
 import { useLanguage } from '@/contexts/language-context';
@@ -25,9 +26,12 @@ import {
   useLiquidTabBarTranslateY,
 } from '@/contexts/liquid-tab-bar-visibility';
 import { useAppColors, useThemeMode } from '@/contexts/theme-context';
+import { useResponsive } from '@/hooks/use-responsive';
 import {
+  ANDROID_TAB_BAR_CONTENT_HEIGHT,
   isLiquidTabBarEnabled,
   LIQUID_BLUR_INTENSITY,
+  LIQUID_TAB_PILL_HEIGHT,
   liquidTabBarBlurTint,
   liquidTabBarIconActive,
   liquidTabBarIconHaloFill,
@@ -39,9 +43,9 @@ import {
   liquidTabBarWash,
 } from '@/utils/liquid-ui';
 
-const PILL_HEIGHT = 68;
+const PILL_HEIGHT = LIQUID_TAB_PILL_HEIGHT;
 const PILL_WIDTH_RATIO = 0.8;
-const ANDROID_TAB_CONTENT_HEIGHT = 58;
+const ANDROID_TAB_CONTENT_HEIGHT = ANDROID_TAB_BAR_CONTENT_HEIGHT;
 const ICON_SLOT = 28;
 
 function TabIconSlot({ children }: { children: React.ReactNode }) {
@@ -202,10 +206,12 @@ function TabLayoutInner() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { t, language } = useLanguage();
+  const { showBottomNav, isWebsiteLayout } = useResponsive();
   const isAndroid = Platform.OS === 'android';
   const isMyanmar = language === 'my';
   // Floating pill only on liquid iOS. Android + older iOS = flat full-width bar.
-  const floating = !isAndroid && isLiquidTabBarEnabled();
+  // Website layout never uses the floating pill (bottom bar is hidden).
+  const floating = showBottomNav && !isAndroid && isLiquidTabBarEnabled();
 
   if (!user) {
     return <Redirect href="/login" />;
@@ -216,6 +222,42 @@ function TabLayoutInner() {
   const activeTint = activeColor;
   const inactiveTint = inactiveColor;
   const androidBottomPad = Math.max(insets.bottom, 8);
+
+  const phoneTabBarStyle = floating
+    ? {
+        height: PILL_HEIGHT,
+        backgroundColor: 'transparent',
+        borderTopWidth: 0,
+        elevation: 0,
+        paddingTop: 4,
+        paddingBottom: 4,
+        paddingHorizontal: 8,
+      }
+    : isAndroid
+      ? {
+          // Match flat iOS: flush bar + hairline only (no elevation — that
+          // made the bar look like a floating slab over the system nav).
+          backgroundColor: colors.tabBar,
+          borderTopColor: colors.tabBarBorder,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          elevation: 0,
+          shadowOpacity: 0,
+          height: ANDROID_TAB_CONTENT_HEIGHT + androidBottomPad + (isMyanmar ? 4 : 0),
+          paddingTop: 6,
+          paddingBottom: androidBottomPad,
+        }
+      : {
+          // Older iOS flat bar — small Myanmar bump so Burmese labels aren't tight.
+          backgroundColor: colors.tabBar,
+          borderTopColor: colors.tabBarBorder,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          ...(isMyanmar ? { paddingTop: 4 } : null),
+        };
+
+  // Wide browser only — hide bottom tabs; native app keeps phoneTabBarStyle.
+  const tabBarStyle = showBottomNav
+    ? phoneTabBarStyle
+    : { display: 'none' as const, height: 0, overflow: 'hidden' as const };
 
   const labelFor =
     (key: 'tabs.products' | 'tabs.cart' | 'tabs.orders' | 'tabs.account') =>
@@ -232,132 +274,103 @@ function TabLayoutInner() {
     );
 
   return (
-    <Tabs
-      // Remount on language / theme so pill colors + EN/MY metrics stay correct.
-      key={`tabs-${language}-${isDark ? 'dark' : 'light'}-${floating ? 'float' : 'flat'}`}
-      tabBar={floating ? (props) => <LiquidFloatingTabBar {...props} /> : undefined}
-      screenOptions={{
-        tabBarActiveTintColor: activeTint,
-        tabBarInactiveTintColor: inactiveTint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarShowLabel: true,
-        tabBarHideOnKeyboard: isAndroid,
-        tabBarStyle: floating
-          ? {
-              height: PILL_HEIGHT,
-              backgroundColor: 'transparent',
-              borderTopWidth: 0,
-              elevation: 0,
-              paddingTop: 4,
-              paddingBottom: 4,
-              paddingHorizontal: 8,
-            }
-          : isAndroid
-            ? {
-                // Clear chrome vs screen: visible top edge + soft lift so light
-                // mode doesn't melt into white cards, dark stays non-ERP.
-                backgroundColor: colors.tabBar,
-                borderTopColor: colors.tabBarBorder,
-                borderTopWidth: 1,
-                elevation: 16,
-                shadowColor: colors.shadow,
-                shadowOpacity: isDark ? 0.45 : 0.12,
-                shadowRadius: 10,
-                shadowOffset: { width: 0, height: -3 },
-                height: ANDROID_TAB_CONTENT_HEIGHT + androidBottomPad + (isMyanmar ? 4 : 0),
-                paddingTop: 6,
-                paddingBottom: androidBottomPad,
-              }
-            : {
-                // Older iOS flat bar — small Myanmar bump so Burmese labels aren't tight.
-                backgroundColor: colors.tabBar,
-                borderTopColor: colors.tabBarBorder,
-                borderTopWidth: StyleSheet.hairlineWidth,
-                ...(isMyanmar ? { paddingTop: 4 } : null),
-              },
-        tabBarBackground: floating ? () => <LiquidTabBarBackground /> : undefined,
-        tabBarItemStyle: {
-          flex: 1,
-          minWidth: 0,
-          alignItems: 'center',
-          justifyContent: 'center',
-          paddingVertical: 0,
-        },
-        tabBarIconStyle: {
-          marginTop: 0,
-          marginBottom: 0,
-        },
-        tabBarLabelStyle: {
-          marginTop: 2,
-          marginBottom: 0,
-        },
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: t('tabs.products'),
-          tabBarLabel: labelFor('tabs.products'),
-          tabBarIcon: ({ focused, size }) => (
-            <TabIconHalo focused={focused} enabled={floating} isDark={isDark}>
-              <MaterialIcons
-                name="inventory-2"
-                size={size ?? 24}
+    <View style={styles.shell}>
+      {isWebsiteLayout ? <WebsiteHeader /> : null}
+      <Tabs
+        // Remount on language / theme so pill colors + EN/MY metrics stay correct.
+        key={`tabs-${language}-${isDark ? 'dark' : 'light'}-${floating ? 'float' : 'flat'}-${showBottomNav ? 'nav' : 'web'}`}
+        tabBar={floating ? (props) => <LiquidFloatingTabBar {...props} /> : undefined}
+        screenOptions={{
+          tabBarActiveTintColor: activeTint,
+          tabBarInactiveTintColor: inactiveTint,
+          headerShown: false,
+          tabBarButton: HapticTab,
+          tabBarShowLabel: true,
+          tabBarHideOnKeyboard: isAndroid,
+          tabBarStyle,
+          tabBarBackground: floating ? () => <LiquidTabBarBackground /> : undefined,
+          tabBarItemStyle: {
+            flex: 1,
+            minWidth: 0,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingVertical: 0,
+          },
+          tabBarIconStyle: {
+            marginTop: 0,
+            marginBottom: 0,
+          },
+          tabBarLabelStyle: {
+            marginTop: 2,
+            marginBottom: 0,
+          },
+        }}>
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: t('tabs.products'),
+            tabBarLabel: labelFor('tabs.products'),
+            tabBarIcon: ({ focused, size }) => (
+              <TabIconHalo focused={focused} enabled={floating} isDark={isDark}>
+                <MaterialIcons
+                  name="inventory-2"
+                  size={size ?? 24}
+                  color={focused ? activeColor : inactiveColor}
+                />
+              </TabIconHalo>
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="cart"
+          options={{
+            title: t('tabs.cart'),
+            tabBarLabel: labelFor('tabs.cart'),
+            tabBarIcon: ({ focused, size }) => (
+              <CartTabIcon
                 color={focused ? activeColor : inactiveColor}
+                size={size}
+                focused={focused}
+                floating={floating}
+                isDark={isDark}
               />
-            </TabIconHalo>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="cart"
-        options={{
-          title: t('tabs.cart'),
-          tabBarLabel: labelFor('tabs.cart'),
-          tabBarIcon: ({ focused, size }) => (
-            <CartTabIcon
-              color={focused ? activeColor : inactiveColor}
-              size={size}
-              focused={focused}
-              floating={floating}
-              isDark={isDark}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="orders"
-        options={{
-          title: t('tabs.orders'),
-          tabBarLabel: labelFor('tabs.orders'),
-          tabBarIcon: ({ focused, size }) => (
-            <TabIconHalo focused={focused} enabled={floating} isDark={isDark}>
-              <MaterialIcons
-                name="receipt-long"
-                size={size ?? 24}
-                color={focused ? activeColor : inactiveColor}
-              />
-            </TabIconHalo>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="account"
-        options={{
-          title: t('tabs.account'),
-          tabBarLabel: labelFor('tabs.account'),
-          tabBarIcon: ({ focused, size }) => (
-            <TabIconHalo focused={focused} enabled={floating} isDark={isDark}>
-              <MaterialIcons
-                name="person"
-                size={size ?? 24}
-                color={focused ? activeColor : inactiveColor}
-              />
-            </TabIconHalo>
-          ),
-        }}
-      />
-    </Tabs>
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="orders"
+          options={{
+            title: t('tabs.orders'),
+            tabBarLabel: labelFor('tabs.orders'),
+            tabBarIcon: ({ focused, size }) => (
+              <TabIconHalo focused={focused} enabled={floating} isDark={isDark}>
+                <MaterialIcons
+                  name="receipt-long"
+                  size={size ?? 24}
+                  color={focused ? activeColor : inactiveColor}
+                />
+              </TabIconHalo>
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="account"
+          options={{
+            title: t('tabs.account'),
+            tabBarLabel: labelFor('tabs.account'),
+            tabBarIcon: ({ focused, size }) => (
+              <TabIconHalo focused={focused} enabled={floating} isDark={isDark}>
+                <MaterialIcons
+                  name="person"
+                  size={size ?? 24}
+                  color={focused ? activeColor : inactiveColor}
+                />
+              </TabIconHalo>
+            ),
+          }}
+        />
+      </Tabs>
+    </View>
   );
 }
 
@@ -374,6 +387,9 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  shell: {
+    flex: 1,
+  },
   barDock: {
     position: 'absolute',
     left: 0,

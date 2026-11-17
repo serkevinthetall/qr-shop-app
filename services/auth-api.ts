@@ -1,30 +1,31 @@
 import { apiRequest } from '@/services/api-client';
 import { getApiFallbackMessage } from '@/services/network-error';
-
-type ApiErrorResponse = {
-  success: false;
-  message: string;
-  details?: {
-    code?: string;
-    retry_after_seconds?: number;
-    remaining_attempts_before_lock?: number;
-    next_lock_minutes?: number;
-    lock_minutes?: number;
-  };
-};
+import {
+  platformErrorCode,
+  platformErrorMessage,
+  unwrapPlatformData,
+} from '@/services/platform-envelope';
 
 export type LoginUser = {
-  id: number;
+  id: string;
   name: string;
   login: string;
+  phone?: string | null;
+  email?: string | null;
+  role?: string;
+  /** Legacy field — always null on Platform API. */
   partner_id: number | null;
 };
 
-type LoginSuccessResponse = {
-  success: true;
-  message: string;
+type PlatformLoginData = {
   token: string;
-  user: LoginUser;
+  user: {
+    id: string;
+    role: string;
+    name: string;
+    phone?: string | null;
+    email?: string | null;
+  };
 };
 
 export class LoginApiError extends Error {
@@ -57,47 +58,54 @@ export class LoginApiError extends Error {
   }
 }
 
+function mapLoginUser(user: PlatformLoginData['user']): LoginUser {
+  const login = String(user.phone || user.email || user.id || '').trim();
+  return {
+    id: String(user.id),
+    name: String(user.name || ''),
+    login,
+    phone: user.phone ?? null,
+    email: user.email ?? null,
+    role: user.role,
+    partner_id: null,
+  };
+}
+
 export async function loginWithApi(login: string, password: string) {
-  const { response, data } = await apiRequest<LoginSuccessResponse | ApiErrorResponse>(
-    '/api/auth/login',
-    {
-      method: 'POST',
-      body: { login, password },
-    },
-  );
+  const { response, data } = await apiRequest<unknown>('/api/auth/login', {
+    method: 'POST',
+    body: { login, password, role: 'buyer' },
+  });
 
-  if (!response.ok || !data?.success) {
-    const details = data && 'details' in data ? data.details : undefined;
-    const retryAfterSeconds = Number(details?.retry_after_seconds || 0);
-    const remainingAttemptsBeforeLock = Number(details?.remaining_attempts_before_lock || 0);
-    const nextLockMinutes = Number(details?.next_lock_minutes || 0);
-    const lockMinutes = Number(details?.lock_minutes || 0);
-
+  const payload = unwrapPlatformData<PlatformLoginData>(data);
+  if (!response.ok || !payload?.token || !payload.user) {
     throw new LoginApiError(
-      data && 'message' in data && data.message
-        ? data.message
-        : 'Email or password is incorrect.',
+      platformErrorMessage(data, 'Email or password is incorrect.'),
       {
         status: response.status,
-        code: details?.code,
-        retryAfterSeconds:
-          response.status === 429 && retryAfterSeconds > 0 ? retryAfterSeconds : undefined,
-        remainingAttemptsBeforeLock:
-          remainingAttemptsBeforeLock > 0 ? remainingAttemptsBeforeLock : undefined,
-        nextLockMinutes: nextLockMinutes > 0 ? nextLockMinutes : undefined,
-        lockMinutes: lockMinutes > 0 ? lockMinutes : undefined,
+        code: platformErrorCode(data),
       },
     );
   }
 
-  return data;
+  if (payload.user.role && payload.user.role !== 'buyer') {
+    throw new LoginApiError('This account is not a buyer account.', {
+      status: 403,
+      code: 'wrong_role',
+    });
+  }
+
+  return {
+    success: true as const,
+    message: 'OK',
+    token: payload.token,
+    user: mapLoginUser(payload.user),
+  };
 }
 
-export async function logoutFromApi(token: string) {
-  await apiRequest('/api/auth/logout', {
-    method: 'POST',
-    token,
-  });
+/** Platform API has no logout endpoint — client clears the JWT locally. */
+export async function logoutFromApi(_token: string, _timeoutMs = 8000) {
+  return;
 }
 
 export async function changePasswordApi(
@@ -105,24 +113,19 @@ export async function changePasswordApi(
   currentPassword: string,
   newPassword: string,
 ) {
-  const { response, data } = await apiRequest<{ success: boolean; message?: string }>(
-    '/api/auth/change-password',
-    {
-      method: 'POST',
-      token,
-      body: { current_password: currentPassword, new_password: newPassword },
-      // Wrong current password must not force logout (legacy APIs used 401).
-      skipSessionExpireOn401: true,
-    },
-  );
+  const { response, data } = await apiRequest<unknown>('/api/auth/change-password', {
+    method: 'POST',
+    token,
+    body: { currentPassword, nextPassword: newPassword },
+    skipSessionExpireOn401: true,
+  });
 
-  if (!response.ok || !data?.success) {
+  const payload = unwrapPlatformData<{ ok?: boolean }>(data);
+  if (!response.ok || !payload) {
     throw new Error(
-      data && 'message' in data && data.message
-        ? data.message
-        : getApiFallbackMessage('changePasswordFailed'),
+      platformErrorMessage(data, getApiFallbackMessage('changePasswordFailed')),
     );
   }
 
-  return data;
+  return { success: true as const, message: 'OK' };
 }

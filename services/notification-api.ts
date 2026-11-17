@@ -1,148 +1,58 @@
-import { apiRequest } from '@/services/api-client';
-import { throwIfUnauthorized } from '@/services/auth-error';
-import { getApiFallbackMessage } from '@/services/network-error';
+/** Push / in-app notifications left out of Platform API cutover. */
 
-export type ProductNotification = {
+export type AppNotification = {
   id: string;
-  type: 'product';
-  product_id: number;
-  product_name: string;
+  type?: 'product' | 'coupon' | string;
+  title?: string;
+  body?: string;
+  product_id?: string;
+  product_name?: string;
   ribbon_name?: string;
-  date: string;
+  coupon_code?: string;
+  amount?: number;
+  read?: boolean;
+  date?: string;
+  create_date?: string;
 };
 
-export type CouponNotification = {
-  id: string;
-  type: 'coupon';
-  coupon_code: string;
-  amount: number;
-  status: string;
-  date: string;
-};
-
-export type AppNotification = ProductNotification | CouponNotification;
-
-type ApiErrorResponse = {
-  success: false;
-  message: string;
-};
-
-type NotificationsResponse = {
-  success: true;
-  notifications: AppNotification[];
-};
-
-function getApiError(data: { success: boolean; message?: string } | null, fallback: string) {
-  if (data && 'message' in data && data.message) {
-    return data.message;
-  }
-
-  return fallback;
-}
-
-export async function fetchNotifications(token: string) {
-  const { response, data } = await apiRequest<NotificationsResponse | ApiErrorResponse>(
-    '/api/notifications',
-    { token },
-  );
-
-  throwIfUnauthorized(response);
-  if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, getApiFallbackMessage('loadNotifications')));
-  }
-
-  return data.notifications;
-}
-
-export async function registerPushToken(token: string, expoPushToken: string, language: 'my' | 'en') {
-  const { response, data } = await apiRequest<{ success: boolean; message?: string } | ApiErrorResponse>(
-    '/api/notifications/register-token',
-    {
-      method: 'POST',
-      token,
-      body: { expo_push_token: expoPushToken, language },
-    },
-  );
-
-  throwIfUnauthorized(response);
-  if (!response.ok || !data?.success) {
-    throw new Error(getApiError(data, getApiFallbackMessage('generic')));
-  }
-}
-
-export async function unregisterPushToken(token: string, expoPushToken?: string | null) {
-  const { response, data } = await apiRequest<{ success: boolean; message?: string } | ApiErrorResponse>(
-    '/api/notifications/register-token',
-    {
-      method: 'DELETE',
-      token,
-      body: expoPushToken ? { expo_push_token: expoPushToken } : {},
-    },
-  );
-
-  throwIfUnauthorized(response);
-  if (!response.ok || !data?.success) {
-    throw new Error(getApiError(data, getApiFallbackMessage('generic')));
-  }
-}
-
-export async function sendTestPush(token: string) {
-  const { response, data } = await apiRequest<{ success: boolean; message?: string } | ApiErrorResponse>(
-    '/api/notifications/test-push',
-    {
-      method: 'POST',
-      token,
-    },
-  );
-
-  throwIfUnauthorized(response);
-  if (!response.ok || !data?.success) {
-    throw new Error(getApiError(data, getApiFallbackMessage('generic')));
-  }
-}
-
-export type PushStatus = {
-  partner_id: number;
-  saved_on_server: boolean;
-  token_count: number;
-  token_preview: string | null;
-  webhook_secret_configured: boolean;
-};
-
-export async function fetchPushStatus(token: string): Promise<PushStatus> {
-  const { response, data } = await apiRequest<
-    | ({
-        success: true;
-        partner_id: number;
-        saved_on_server: boolean;
-        token_count: number;
-        token_preview: string | null;
-        webhook_secret_configured: boolean;
-      })
-    | ApiErrorResponse
-  >('/api/notifications/push-status', { token });
-
-  throwIfUnauthorized(response);
-  if (!response.ok || !data || data.success !== true) {
-    throw new Error(getApiError(data, getApiFallbackMessage('generic')));
-  }
-
-  return {
-    partner_id: data.partner_id,
-    saved_on_server: data.saved_on_server,
-    token_count: data.token_count,
-    token_preview: data.token_preview,
-    webhook_secret_configured: data.webhook_secret_configured,
-  };
-}
-
-// Odoo datetimes arrive as "YYYY-MM-DD HH:MM:SS" in UTC. Convert to epoch ms so
-// the app can compare against the locally stored "last seen" timestamp.
-export function notificationDateToMs(date: string) {
-  if (!date) {
+export function notificationDateToMs(value?: string | number | null) {
+  if (value == null || value === '') {
     return 0;
   }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
-  const ms = Date.parse(`${date.replace(' ', 'T')}Z`);
-  return Number.isNaN(ms) ? 0 : ms;
+export async function fetchNotifications(_token: string) {
+  return [] as AppNotification[];
+}
+
+export async function registerPushToken(
+  _token: string,
+  _expoPushToken: string | null,
+  _languageOrTimeout?: string | number,
+) {
+  return;
+}
+
+export async function unregisterPushToken(
+  _token: string,
+  _expoPushToken: string | null,
+  _languageOrTimeout?: string | number,
+) {
+  return;
+}
+
+export async function sendTestPush(_token: string) {
+  return { ok: false as const };
+}
+
+export async function fetchPushStatus(_token: string) {
+  return {
+    registered: false,
+    partner_id: 0,
+  };
 }

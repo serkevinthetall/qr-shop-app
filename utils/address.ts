@@ -1,6 +1,9 @@
-import { MYANMAR_COUNTRY_ID } from '@/constants/townships';
+import {
+  cleanStateName,
+  MYANMAR_COUNTRY_ID,
+  normalizeText,
+} from '@/constants/townships';
 import type { AddressMeta, AddressState } from '@/types/address';
-import { cleanStateName, normalizeText } from '@/constants/townships';
 
 export const DEFAULT_ADDRESS_META: AddressMeta = {
   country_id: MYANMAR_COUNTRY_ID,
@@ -37,16 +40,12 @@ export function buildAddressPayload(input: {
   meta?: AddressMeta | null;
 }) {
   const meta = input.meta ?? DEFAULT_ADDRESS_META;
-  const stateId = resolveStateId(input.stateLabel, meta.states);
+  const townshipId = resolveStateId(input.city, meta.states);
 
   return {
     name: input.name.trim(),
-    phone: input.phone.trim(),
+    ...(input.phone.trim() ? { phone: input.phone.trim() } : {}),
     street: input.street.trim(),
-    street2: input.street2?.trim() || '',
-    city: input.city.trim(),
-    zip: input.zip.trim(),
-    country_id: meta.country_id,
-    ...(stateId ? { state_id: stateId } : { state: input.stateLabel }),
+    townshipId: townshipId ?? input.zip.trim(),
   };
 }

@@ -4,13 +4,9 @@ import { router } from 'expo-router';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { clearPreferredApiBase } from '@/constants/api';
-import { useLanguage } from '@/contexts/language-context';
 import { trackLoginSuccess } from '@/services/analytics';
 import { loginWithApi, logoutFromApi } from '@/services/auth-api';
 import { clearSessionBootstrap } from '@/services/catalog-bootstrap';
-import { getExpoPushToken } from '@/services/device-notifications';
-import { unregisterPushToken } from '@/services/notification-api';
-import { registerPushForAuthSession } from '@/services/push-registration';
 import { registerSessionExpiredHandler } from '@/services/session-expired';
 
 const SESSION_KEY = 'qr-app-session';
@@ -18,9 +14,12 @@ const TOKEN_KEY = 'qr-app-token';
 const CART_KEY = 'qr-app-cart';
 
 export type User = {
-  id: number;
+  id: string;
   name: string;
   login: string;
+  phone?: string | null;
+  email?: string | null;
+  /** Legacy — unused on Platform API. */
   partner_id: number | null;
 };
 
@@ -48,7 +47,6 @@ async function scrubLegacyAsyncSession() {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { language } = useLanguage();
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -144,12 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: data.user,
       });
 
-      // Finish push setup during login loading so background alerts work
-      // before the user reaches the home screen.
-      await registerPushForAuthSession(data.token, language);
-
       // Track native app analytics only (Vercel Analytics is web-only).
-      // Do not block login if analytics fails.
       await trackLoginSuccess({
         userId: data.user.id,
         loginType: trimmedLogin.includes('@') ? 'email' : 'phone',
@@ -157,27 +150,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return data.token;
     },
-    [persistSession, language],
+    [persistSession],
   );
 
   const signOut = useCallback(async () => {
-    if (token) {
-      try {
-        const expoPushToken = await getExpoPushToken();
-        await unregisterPushToken(token, expoPushToken);
-      } catch {
-        // Continue logout even if push token cleanup fails.
-      }
+    const sessionToken = token;
 
-      try {
-        await logoutFromApi(token);
-      } catch {
-        // Clear local session even if logout API fails.
-      }
+    // Clear local session first so Sign Out always works when API is down.
+    clearPreferredApiBase();
+    clearSessionBootstrap();
+    await persistSession(null);
+
+    if (!sessionToken) {
+      return;
     }
 
-    await persistSession(null);
-    clearSessionBootstrap();
+    void logoutFromApi(sessionToken, 4000).catch(() => undefined);
   }, [persistSession, token]);
 
   const value = useMemo(

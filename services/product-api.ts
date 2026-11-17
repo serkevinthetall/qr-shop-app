@@ -1,47 +1,119 @@
+import { getApiBaseUrl } from '@/constants/api';
 import { apiRequest } from '@/services/api-client';
 import { throwIfUnauthorized } from '@/services/auth-error';
-import { JUST_FOR_YOU, type Category, type CategorySelection, type Product } from '@/types/product';
 import { getApiFallbackMessage } from '@/services/network-error';
+import {
+  platformErrorMessage,
+  resolvePlatformMediaUrl,
+  unwrapPlatformData,
+} from '@/services/platform-envelope';
+import {
+  JUST_FOR_YOU,
+  type Category,
+  type CategorySelection,
+  type Product,
+} from '@/types/product';
 
-type ApiErrorResponse = {
-  success: false;
-  message: string;
-};
+/**
+ * QR App product API — dedicated Platform routes under /api/app/catalog.
+ * Retail-only (no wholesale). Not the shared Marketplace /api/catalog.
+ */
 
-type ProductsResponse = {
-  success: true;
-  products: Product[];
-};
+type MallRow = Record<string, unknown>;
 
-type ProductResponse = {
-  success: true;
-  product: Product | null;
-  similar_products?: Product[];
-};
+function mapAppProduct(row: MallRow): Product {
+  const id = String(row.id || '');
+  const shopId = String(row.shopId || '');
+  const productId = String(row.productId || '');
+  const name = String(row.name || '');
+  const priceKs = Number(row.priceKs) || 0;
+  const categoryId = String(row.categoryId || '').trim();
+  const shopName = String(row.shopName || row.brand || '');
+  const imageUrl = resolvePlatformMediaUrl(
+    getApiBaseUrl(),
+    String(row.imageUrl || ''),
+  );
+  const badge = row.badge ? String(row.badge) : '';
+  const stock =
+    row.stock == null ? undefined : Math.max(0, Math.floor(Number(row.stock) || 0));
+  const compareAtKs =
+    row.compareAtKs != null && Number(row.compareAtKs) > 0
+      ? Number(row.compareAtKs)
+      : null;
 
-type CategoriesResponse = {
-  success: true;
-  categories: Category[];
-};
-
-function getApiError(data: { success: boolean; message?: string } | null, fallback: string) {
-  if (data && 'message' in data && data.message) {
-    return data.message;
-  }
-
-  return fallback;
+  return {
+    id,
+    productId: productId || undefined,
+    shopId: shopId || undefined,
+    shopName: shopName || undefined,
+    name,
+    list_price: priceKs,
+    /** App catalog never returns wholesale — keep fields empty for type compat. */
+    priceB2bKs: null,
+    wholesaleMinQty: null,
+    stock,
+    canOrder: row.canOrder !== false,
+    description_sale: false,
+    categ_id: categoryId ? [categoryId, categoryId] : false,
+    public_categ_ids: categoryId ? [categoryId] : [],
+    tags: [],
+    image_url: imageUrl || false,
+    write_date: row.updatedAt ? String(row.updatedAt) : false,
+    ribbon: badge
+      ? {
+          name: badge,
+          bg_color: '#0d9488',
+          text_color: '#ffffff',
+          position: 'left',
+          style: 'tag',
+        }
+      : null,
+    compare_at: compareAtKs,
+  };
 }
 
-function buildCategoryQuery(selection?: CategorySelection) {
-  if (selection === JUST_FOR_YOU) {
-    return '&just_for_you=1';
-  }
+function mapCategory(row: MallRow): Category {
+  const id = String(row.id || '');
+  const name = String(row.nameMy || row.name || id);
+  return {
+    id,
+    name,
+    parent_id: false,
+  };
+}
 
-  if (typeof selection === 'number' && selection > 0) {
-    return `&category_id=${selection}`;
+function catalogRows(data: unknown): MallRow[] {
+  if (Array.isArray(data)) return data as MallRow[];
+  if (data && typeof data === 'object') {
+    const products = (data as { products?: unknown }).products;
+    if (Array.isArray(products)) return products as MallRow[];
   }
+  return [];
+}
 
-  return '';
+async function fetchAppCatalogPage(params: {
+  limit: number;
+  page: number;
+  q?: string;
+  categoryId?: string;
+  token?: string | null;
+}) {
+  const qs = new URLSearchParams();
+  qs.set('limit', String(params.limit));
+  qs.set('page', String(params.page));
+  if (params.q) qs.set('q', params.q);
+  if (params.categoryId) qs.set('categoryId', params.categoryId);
+
+  const { response, data } = await apiRequest<unknown>(
+    `/api/app/catalog?${qs.toString()}`,
+    { token: params.token || undefined },
+  );
+  throwIfUnauthorized(response);
+  if (!response.ok) {
+    throw new Error(platformErrorMessage(data, getApiFallbackMessage('loadProducts')));
+  }
+  const payload = unwrapPlatformData<unknown>(data);
+  return catalogRows(payload).map(mapAppProduct);
 }
 
 export async function fetchProducts(
@@ -50,52 +122,51 @@ export async function fetchProducts(
   selection?: CategorySelection,
   token?: string | null,
 ) {
-  const { response, data } = await apiRequest<ProductsResponse | ApiErrorResponse>(
-    `/api/products?limit=${limit}&offset=${offset}${buildCategoryQuery(selection)}`,
-    { token: token || undefined },
-  );
-
-  throwIfUnauthorized(response);
-  if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, getApiFallbackMessage('loadProducts')));
+  if (selection === JUST_FOR_YOU) {
+    return [];
   }
 
-  return data.products;
+  const page = Math.floor(offset / Math.max(1, limit)) + 1;
+  const categoryId =
+    typeof selection === 'string' && selection && selection !== JUST_FOR_YOU
+      ? selection
+      : undefined;
+
+  return fetchAppCatalogPage({ limit, page, categoryId, token });
 }
 
 export async function fetchProductById(
-  id: number,
+  id: string | number,
   token?: string | null,
-  options?: { similarLimit?: number },
+  _options?: { similarLimit?: number },
 ) {
-  const similarLimit =
-    typeof options?.similarLimit === 'number' ? options.similarLimit : 8;
-  const { response, data } = await apiRequest<ProductResponse | ApiErrorResponse>(
-    `/api/products/${id}?similar_limit=${similarLimit}`,
+  const mallId = String(id || '').trim();
+  const { response, data } = await apiRequest<unknown>(
+    `/api/app/catalog/${encodeURIComponent(mallId)}`,
     { token: token || undefined },
   );
-
   throwIfUnauthorized(response);
-  if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, getApiFallbackMessage('loadProduct')));
+  if (!response.ok) {
+    throw new Error(platformErrorMessage(data, getApiFallbackMessage('loadProduct')));
   }
 
-  return {
-    product: data.product,
-    similarProducts: data.similar_products ?? [],
-  };
+  const payload = unwrapPlatformData<MallRow>(data);
+  if (!payload) {
+    return { product: null as Product | null, similarProducts: [] as Product[] };
+  }
+
+  const product = mapAppProduct(payload);
+  return { product, similarProducts: [] as Product[] };
 }
 
 export async function fetchCategories() {
-  const { response, data } = await apiRequest<CategoriesResponse | ApiErrorResponse>(
-    '/api/categories',
-  );
-
-  if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, getApiFallbackMessage('loadCategories')));
+  const { response, data } = await apiRequest<unknown>('/api/app/catalog/categories');
+  if (!response.ok) {
+    throw new Error(platformErrorMessage(data, getApiFallbackMessage('loadCategories')));
   }
-
-  return data.categories;
+  const payload = unwrapPlatformData<unknown>(data);
+  const rows = Array.isArray(payload) ? (payload as MallRow[]) : [];
+  return rows.map(mapCategory);
 }
 
 export async function searchProducts(
@@ -103,21 +174,24 @@ export async function searchProducts(
   selection?: CategorySelection,
   token?: string | null,
 ) {
-  const { response, data } = await apiRequest<ProductsResponse | ApiErrorResponse>(
-    `/api/products/search?q=${encodeURIComponent(query)}${buildCategoryQuery(selection)}`,
-    { token: token || undefined },
-  );
-
-  throwIfUnauthorized(response);
-  if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, getApiFallbackMessage('searchProducts')));
+  if (selection === JUST_FOR_YOU) {
+    return [];
   }
-
-  return data.products;
+  const categoryId =
+    typeof selection === 'string' && selection && selection !== JUST_FOR_YOU
+      ? selection
+      : undefined;
+  return fetchAppCatalogPage({
+    limit: 200,
+    page: 1,
+    q: query.trim(),
+    categoryId,
+    token,
+  });
 }
 
 export type ProductPriceRow = {
-  id: number;
+  id: string;
   list_price: number;
 };
 
@@ -127,30 +201,14 @@ export type ProductPricesSnapshot = {
   prices: ProductPriceRow[];
 };
 
-type ProductPricesResponse = {
-  success: true;
-  unchanged: boolean;
-  version: string;
-  prices: ProductPriceRow[];
-};
-
-/** Lightweight price poll used while the products tab is open. */
-export async function fetchProductPrices(token?: string | null, version?: string | null) {
-  const path = version
-    ? `/api/products/prices?version=${encodeURIComponent(version)}`
-    : '/api/products/prices';
-  const { response, data } = await apiRequest<ProductPricesResponse | ApiErrorResponse>(path, {
-    token: token || undefined,
-  });
-
-  throwIfUnauthorized(response);
-  if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, getApiFallbackMessage('loadProducts')));
-  }
-
+/** Platform has no price-delta endpoint — return empty so callers refresh catalog instead. */
+export async function fetchProductPrices(
+  _token?: string | null,
+  _version?: string | null,
+): Promise<ProductPricesSnapshot> {
   return {
-    unchanged: Boolean(data.unchanged),
-    version: data.version,
-    prices: data.prices ?? [],
-  } satisfies ProductPricesSnapshot;
+    unchanged: true,
+    version: String(Date.now()),
+    prices: [],
+  };
 }

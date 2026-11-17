@@ -25,10 +25,10 @@ import { getAppColors } from '@/constants/app-colors';
 import { MYANMAR_FONTS } from '@/constants/fonts';
 import { hydratePreferredApiBase } from '@/constants/api';
 import { AndroidSystemNavScrim } from '@/components/android-system-nav-scrim';
-import { NotificationBootstrap } from '@/components/notification-bootstrap';
 import { OfflineNotice } from '@/components/offline-notice';
 import { ForceUpdateModal } from '@/components/force-update-modal';
 import { ServerDownNotice } from '@/components/server-down-notice';
+import { WebNavDrawer } from '@/components/web/web-nav-drawer';
 import { AppStatusProvider } from '@/contexts/app-status-context';
 import { AuthProvider } from '@/contexts/auth-context';
 import { CartProvider } from '@/contexts/cart-context';
@@ -36,6 +36,7 @@ import { LanguageProvider, useLanguage } from '@/contexts/language-context';
 import { NetworkProvider } from '@/contexts/network-context';
 import { NotificationProvider } from '@/contexts/notification-context';
 import { ThemeProvider, useThemeMode } from '@/contexts/theme-context';
+import { WebNavProvider } from '@/contexts/web-nav-context';
 import { initAppAnalytics, trackAppOpen } from '@/services/analytics';
 import { initSslPinning } from '@/services/ssl-pinning';
 
@@ -117,17 +118,15 @@ function RootNavigator() {
     void SystemUI.setBackgroundColorAsync(root);
   }, [colors.background, colors.tabBar]);
 
-  // Android system nav button contrast:
-  // - dark mode → light buttons (style "dark" = dark bar / light glyphs)
-  // - light mode → dark buttons (style "light" = light bar / dark glyphs)
-  // Requires native enforceContrast=false (app.json) so Android does not paint
-  // the pink/lavender contrast scrim over the bottom inset.
-  const androidNavStyle = isDark ? 'dark' : 'light';
+  // expo-navigation-bar style = icon/content color (not bar fill):
+  // - "light" → light glyphs (use on dark chrome)
+  // - "dark"  → dark glyphs (use on light chrome)
+  // Bar fill stays transparent (enforceContrast=false); SystemUI + scrim match tabBar.
+  const androidNavStyle = isDark ? 'light' : 'dark';
 
   return (
     <PaperProvider theme={paperTheme}>
       <NavigationThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-        <NotificationBootstrap />
         <OfflineNotice />
         <ServerDownNotice />
         <ForceUpdateModal />
@@ -193,7 +192,10 @@ export default function RootLayout() {
               <AuthProvider>
                 <NotificationProvider>
                   <CartProvider>
-                    <RootNavigator />
+                    <WebNavProvider>
+                      <RootNavigator />
+                      <WebNavDrawer />
+                    </WebNavProvider>
                   </CartProvider>
                 </NotificationProvider>
               </AuthProvider>

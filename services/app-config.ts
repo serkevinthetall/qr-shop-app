@@ -96,28 +96,73 @@ export async function fetchAppConfig(timeoutMs = 45000): Promise<AppConfig> {
         signal: controller.signal,
       });
 
+      // Host without /api/app-config yet (Platform 404) — don't block the app.
+      if (response.status === 404) {
+        noteApiBaseSuccess(baseUrl);
+        return {
+          maintenance: false,
+          min_version: '1.0.0',
+          min_ios_version: '1.0.0',
+          min_android_version: '1.0.0',
+          ios_store_url: '',
+          android_store_url: DEFAULT_ANDROID_STORE,
+        };
+      }
+
       if (!response.ok) {
         throw new Error(`App config HTTP ${response.status}`);
       }
 
-      const data = (await response.json()) as Partial<AppConfig> & {
+      const json = (await response.json()) as Partial<AppConfig> & {
+        ok?: boolean;
         success?: boolean;
+        data?: Partial<AppConfig> & { maintenance?: boolean | string | number };
         maintenance?: boolean | string | number;
+        error?: { message?: string };
       };
 
-      if (!data || data.success === false) {
+      // Some hosts return 200 with { ok:false, error: Not found }.
+      const notFoundMessage = String(json?.error?.message || '');
+      if (
+        json?.ok === false &&
+        /not\s*found/i.test(notFoundMessage)
+      ) {
+        noteApiBaseSuccess(baseUrl);
+        return {
+          maintenance: false,
+          min_version: '1.0.0',
+          min_ios_version: '1.0.0',
+          min_android_version: '1.0.0',
+          ios_store_url: '',
+          android_store_url: DEFAULT_ANDROID_STORE,
+        };
+      }
+
+      if (!json || json.success === false || json.ok === false) {
         throw new Error('Invalid app config response');
       }
+
+      // Platform API: { ok: true, data: {...} } — also accept flat legacy payloads.
+      const data =
+        json.data && typeof json.data === 'object'
+          ? { ...json, ...json.data }
+          : json;
 
       noteApiBaseSuccess(baseUrl);
 
       const maintenanceRaw = data.maintenance;
       const maintenance =
         maintenanceRaw === true ||
-        maintenanceRaw === 1 ||
-        String(maintenanceRaw).trim().toLowerCase() === 'true' ||
-        String(maintenanceRaw).trim().toLowerCase() === '1' ||
-        String(maintenanceRaw).trim().toLowerCase() === 'yes';
+        Number(maintenanceRaw) === 1 ||
+        String(maintenanceRaw ?? '')
+          .trim()
+          .toLowerCase() === 'true' ||
+        String(maintenanceRaw ?? '')
+          .trim()
+          .toLowerCase() === '1' ||
+        String(maintenanceRaw ?? '')
+          .trim()
+          .toLowerCase() === 'yes';
 
       return {
         maintenance,

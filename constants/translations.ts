@@ -14,6 +14,13 @@ const en: TranslationTree = {
     orders: 'Orders',
     account: 'Account',
   },
+  web: {
+    openMenu: 'Open menu',
+    closeMenu: 'Close menu',
+    browse: 'Browse',
+    signIn: 'Sign in',
+    signOut: 'Sign out',
+  },
   common: {
     total: 'Total',
     cancel: 'Cancel',
@@ -448,6 +455,13 @@ const my: TranslationTree = {
     cart: 'စျေးခြင်း',
     orders: 'အော်ဒါများ',
     account: 'အကောင့်',
+  },
+  web: {
+    openMenu: 'မီနူး ဖွင့်ရန်',
+    closeMenu: 'မီနူး ပိတ်ရန်',
+    browse: 'ကြည့်ရှုရန်',
+    signIn: 'ဝင်ရောက်ရန်',
+    signOut: 'ထွက်ရန်',
   },
   common: {
     total: 'စုစုပေါင်း',

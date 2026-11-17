@@ -13,19 +13,19 @@ import type { Address } from '@/types/address';
 import { canEditAddress, getDeliveryAddresses, getMainAddress } from '@/types/address';
 
 export type AddressCheckoutHandle = {
-  resolveAddressId: () => Promise<number>;
+  resolveAddressId: () => Promise<string>;
 };
 
 type AddressCheckoutSectionProps = {
   token: string;
   onError: (message: string) => void;
-  onSelectionChange?: (addressId: number | null) => void;
+  onSelectionChange?: (addressId: string | null) => void;
   /** When true, omit outer card chrome (used inside fulfillment accordion). */
   embedded?: boolean;
 };
 
-function isSameAddressId(a: number | null, b: number) {
-  return a !== null && Number(a) === Number(b);
+function isSameAddressId(a: string | null, b: string) {
+  return a !== null && String(a) === String(b);
 }
 
 export const AddressCheckoutSection = forwardRef<AddressCheckoutHandle, AddressCheckoutSectionProps>(
@@ -35,13 +35,13 @@ export const AddressCheckoutSection = forwardRef<AddressCheckoutHandle, AddressC
     const { t, fs, lh } = useLanguage();
 
     const [addresses, setAddresses] = useState<Address[]>([]);
-    const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
-    const selectedAddressIdRef = useRef<number | null>(null);
+    const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+    const selectedAddressIdRef = useRef<string | null>(null);
     const onErrorRef = useRef(onError);
 
     onErrorRef.current = onError;
 
-    const selectAddressId = useCallback((addressId: number | null) => {
+    const selectAddressId = useCallback((addressId: string | null) => {
       selectedAddressIdRef.current = addressId;
       setSelectedAddressId(addressId);
       onSelectionChange?.(addressId);
@@ -57,13 +57,15 @@ export const AddressCheckoutSection = forwardRef<AddressCheckoutHandle, AddressC
     }, [token]);
 
     const refreshAddresses = useCallback(
-      async (preferredId?: number) => {
+      async (preferredId?: string) => {
         const checkoutAddresses = await loadAddresses();
         setAddresses(checkoutAddresses);
 
-        if (preferredId && checkoutAddresses.some((item) => item.id === preferredId)) {
+        if (preferredId && checkoutAddresses.some((item) => String(item.id) === String(preferredId))) {
           selectAddressId(preferredId);
-        } else if (!checkoutAddresses.some((item) => item.id === selectedAddressIdRef.current)) {
+        } else if (!checkoutAddresses.some(
+          (item) => String(item.id) === String(selectedAddressIdRef.current),
+        )) {
           selectAddressId(checkoutAddresses[0]?.id ?? null);
         }
 
@@ -87,7 +89,9 @@ export const AddressCheckoutSection = forwardRef<AddressCheckoutHandle, AddressC
 
           const currentId = selectedAddressIdRef.current;
 
-          if (currentId && checkoutAddresses.some((item) => item.id === currentId)) {
+          if (currentId && checkoutAddresses.some(
+            (item) => String(item.id) === String(currentId),
+          )) {
             setSelectedAddressId(currentId);
             onSelectionChange?.(currentId);
           } else {
@@ -153,7 +157,7 @@ export const AddressCheckoutSection = forwardRef<AddressCheckoutHandle, AddressC
       setEditingAddress(null);
     };
 
-    const handleAddressSaved = async (addressId: number) => {
+    const handleAddressSaved = async (addressId: string) => {
       closeFormModal();
 
       try {

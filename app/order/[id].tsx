@@ -17,6 +17,8 @@ import {
   getOrderDeliveryStatus,
   getOrderShippingLabel,
   getStatusLabel,
+  getPickupPlaceLabel,
+  orderHasPickupNotice,
   type DeliveryBucketItem,
   type DeliveryStatus,
   type Order,
@@ -71,7 +73,7 @@ export default function OrderDetailScreen() {
     setIsLoading(true);
     setError('');
     try {
-      const data = await fetchOrderById(token, Number(id));
+      const data = await fetchOrderById(token, String(id));
       setOrder(data.order);
       setLines(data.lines);
       setDeliveringNow(data.delivering_now);
@@ -127,6 +129,8 @@ export default function OrderDetailScreen() {
   const originalTotal = order.amount_total - discountTotal;
   const deliveryStatus = getOrderDeliveryStatus(order);
   const shippingLabel = getOrderShippingLabel(order);
+  const isPickupOrder = orderHasPickupNotice(order);
+  const pickupPlace = getPickupPlaceLabel(order, t('orderDetail.pickupPoint'));
   const statusBadge = getStatusBadgeColors(deliveryStatus, colors);
   const showDeliverySplit =
     deliveryStatus === 'partial' || deliveryStatus === 'preparing' || deliveryStatus === 'delivered';
@@ -215,40 +219,49 @@ export default function OrderDetailScreen() {
               />
             )}
 
-            {order.fulfillment_method === 'pickup' && order.pickup_point ? (
+            {isPickupOrder ? (
               <View style={styles.detailRow}>
-                <Text style={[styles.detailLabel, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
+                <Text
+                  style={[
+                    styles.detailValueStrong,
+                    { color: colors.text, fontSize: fs(15), lineHeight: lh(15) },
+                  ]}>
                   {t('orderDetail.pickupPoint')}
                 </Text>
-                <Text style={[styles.detailValue, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}>
-                  {[order.pickup_point.name, order.pickup_point.address].filter(Boolean).join('\n')}
-                </Text>
+                {pickupPlace ? (
+                  <Text style={[styles.detailValue, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}>
+                    {pickupPlace}
+                  </Text>
+                ) : null}
               </View>
-            ) : shippingLabel ? (
-              <View style={styles.detailRow}>
-                <Text style={[styles.detailLabel, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
-                  {t('orderDetail.deliveryAddress')}
-                </Text>
-                <Text style={[styles.detailValue, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}>
-                  {shippingLabel}
-                </Text>
-              </View>
-            ) : null}
+            ) : (
+              <>
+                {shippingLabel ? (
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
+                      {t('orderDetail.deliveryAddress')}
+                    </Text>
+                    <Text style={[styles.detailValue, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}>
+                      {shippingLabel}
+                    </Text>
+                  </View>
+                ) : null}
+                {order.x_studio_delivery_notes ? (
+                  <DetailRow
+                    label={t('orderDetail.deliveryNotes')}
+                    value={String(order.x_studio_delivery_notes)}
+                    colors={colors}
+                    fs={fs}
+                    lh={lh}
+                  />
+                ) : null}
+              </>
+            )}
 
             {order.x_studio_preferred_delivery_date ? (
               <DetailRow
                 label={t('orderDetail.deliveryDate')}
                 value={String(order.x_studio_preferred_delivery_date)}
-                colors={colors}
-                fs={fs}
-                lh={lh}
-              />
-            ) : null}
-
-            {order.x_studio_delivery_notes ? (
-              <DetailRow
-                label={t('orderDetail.deliveryNotes')}
-                value={String(order.x_studio_delivery_notes)}
                 colors={colors}
                 fs={fs}
                 lh={lh}

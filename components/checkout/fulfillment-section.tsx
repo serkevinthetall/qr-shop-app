@@ -6,19 +6,25 @@ import {
   AddressCheckoutSection,
   type AddressCheckoutHandle,
 } from '@/components/checkout/address-section';
+import { LiquidSurface } from '@/components/liquid-surface';
 import { useLanguage } from '@/contexts/language-context';
-import { useAppColors } from '@/contexts/theme-context';
+import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import { fetchAddresses } from '@/services/address-api';
 import { getUserFacingError } from '@/services/auth-error';
 import { fetchPickupPoints } from '@/services/pickup-point-api';
 import { getDeliveryAddresses, getMainAddress } from '@/types/address';
 import type { FulfillmentMethod, PickupPoint } from '@/types/pickup-point';
+import {
+  isLiquidUiEnabled,
+  liquidGlassBorder,
+  liquidGlassFill,
+} from '@/utils/liquid-ui';
 
 export type FulfillmentCheckoutHandle = {
   resolveSelection: () => Promise<
-    | { fulfillmentMethod: 'pickup'; pickupPointId: number; addressId: number }
-    | { fulfillmentMethod: 'delivery'; addressId: number }
+    | { fulfillmentMethod: 'pickup'; pickupPointId: string; addressId: string }
+    | { fulfillmentMethod: 'delivery'; addressId: string }
   >;
 };
 
@@ -26,71 +32,51 @@ type FulfillmentCheckoutSectionProps = {
   token: string;
   onError: (message: string) => void;
   onFulfillmentChange: (method: FulfillmentMethod) => void;
-  onAddressSelectionChange?: (addressId: number | null) => void;
+  onAddressSelectionChange?: (addressId: string | null) => void;
 };
 
-function AccordionHeader({
-  title,
-  subtitle,
-  open,
+function MethodSegment({
+  label,
+  selected,
   onPress,
   colors,
-  titleSize,
-  subtitleSize,
-  chevronSize,
-  titleLineHeight,
-  subtitleLineHeight,
+  fontSize,
+  liquid,
+  idleFill,
 }: {
-  title: string;
-  subtitle?: string;
-  open: boolean;
+  label: string;
+  selected: boolean;
   onPress: () => void;
   colors: ReturnType<typeof useAppColors>;
-  titleSize: number;
-  subtitleSize: number;
-  chevronSize: number;
-  /** Prefer `lh()` — undefined so Burmese diacritics are not clipped. */
-  titleLineHeight?: number;
-  subtitleLineHeight?: number;
+  fontSize: number;
+  liquid: boolean;
+  idleFill: string;
 }) {
+  const selectedBg = liquid ? colors.primaryContainer : colors.primary;
+  const selectedFg = liquid ? colors.onPrimaryContainer : colors.onPrimary;
+
   return (
     <Pressable
       onPress={onPress}
       style={[
-        styles.accordionHeader,
+        styles.segment,
         {
-          backgroundColor: open ? colors.primaryMuted : colors.inputBg,
-          borderColor: open ? colors.primary : colors.border,
+          backgroundColor: selected ? selectedBg : idleFill,
         },
       ]}
       accessibilityRole="button"
-      accessibilityState={{ expanded: open }}>
-      <View style={styles.accordionHeaderText}>
-        <Text
-          style={[
-            styles.accordionTitle,
-            {
-              color: colors.text,
-              fontSize: titleSize,
-              ...(titleLineHeight != null ? { lineHeight: titleLineHeight } : null),
-            },
-          ]}>
-          {title}
-        </Text>
-        {subtitle && !open ? (
-          <Text
-            style={{
-              color: colors.textMuted,
-              fontSize: subtitleSize,
-              marginTop: 6,
-              ...(subtitleLineHeight != null ? { lineHeight: subtitleLineHeight } : null),
-            }}>
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-      <Text style={[styles.accordionChevron, { color: colors.textMuted, fontSize: chevronSize }]}>
-        {open ? '▾' : '▸'}
+      accessibilityState={{ selected }}>
+      <Text
+        style={[
+          styles.segmentLabel,
+          {
+            color: selected ? selectedFg : colors.textMuted,
+            fontSize,
+            fontWeight: selected ? '700' : '600',
+          },
+        ]}
+        numberOfLines={2}>
+        {label}
       </Text>
     </Pressable>
   );
@@ -104,8 +90,13 @@ export const FulfillmentCheckoutSection = forwardRef<
   ref,
 ) {
   const colors = useAppColors();
+  const { isDark } = useThemeMode();
   const { rs } = useResponsive();
   const { t, fs, lh } = useLanguage();
+  const liquid = isLiquidUiEnabled();
+  const trackBorder = liquid ? liquidGlassBorder(isDark) : colors.border;
+  const idleFill = liquid ? liquidGlassFill(isDark) : 'transparent';
+  const cardBorder = liquid ? liquidGlassBorder(isDark) : colors.border;
 
   const addressRef = useRef<AddressCheckoutHandle>(null);
   const [method, setMethod] = useState<FulfillmentMethod>('delivery');
@@ -113,7 +104,7 @@ export const FulfillmentCheckoutSection = forwardRef<
   const [selectedPickupId, setSelectedPickupId] = useState<number | null>(null);
   const selectedPickupIdRef = useRef<number | null>(null);
   /** Silent Odoo contact (partner_shipping_id) — not shown in Self Pickup UI. */
-  const selectedContactIdRef = useRef<number | null>(null);
+  const selectedContactIdRef = useRef<string | null>(null);
   const [isLoadingPickup, setIsLoadingPickup] = useState(true);
   const [pickupError, setPickupError] = useState('');
   const onErrorRef = useRef(onError);
@@ -187,12 +178,17 @@ export const FulfillmentCheckoutSection = forwardRef<
     () => ({
       resolveSelection: async () => {
         if (method === 'pickup') {
-          const pickupPointId = selectedPickupIdRef.current;
+          // Platform shop pickup has no separate points list — allow empty.
+          const pickupPointId = selectedPickupIdRef.current
+            ? String(selectedPickupIdRef.current)
+            : pickupPoints.length
+              ? ''
+              : 'shop';
           if (!pickupPointId) {
             throw new Error(t('checkout.errorSelectPickup'));
           }
 
-          // Background: always attach the customer's main Contact for Odoo.
+          // Still attach a buyer address for contact / order context.
           let addressId = selectedContactIdRef.current;
           if (!addressId) {
             try {
@@ -214,11 +210,13 @@ export const FulfillmentCheckoutSection = forwardRef<
         return { fulfillmentMethod: 'delivery', addressId };
       },
     }),
-    [method, resolveMainContactId, t],
+    [method, pickupPoints.length, resolveMainContactId, t],
   );
 
   const selectedPickup =
     pickupPoints.find((point) => Number(point.id) === Number(selectedPickupId)) ?? null;
+
+  const segmentFontSize = fs(rs(14)) ?? rs(14);
 
   return (
     <View style={styles.wrap}>
@@ -226,22 +224,40 @@ export const FulfillmentCheckoutSection = forwardRef<
         {t('fulfillment.howToFulfill')}
       </Text>
 
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <AccordionHeader
-          title={t('fulfillment.selfPickup')}
-          subtitle={t('fulfillment.tapToPickup')}
-          open={method === 'pickup'}
+      <LiquidSurface
+        style={[styles.segmentTrack, { borderColor: trackBorder }]}
+        backgroundColor={colors.inputBg}
+        glassStyle="regular"
+        interactive
+        cornerRadius={14}>
+        <MethodSegment
+          label={t('fulfillment.selfPickup')}
+          selected={method === 'pickup'}
           onPress={() => setFulfillment('pickup')}
           colors={colors}
-          titleSize={fs(rs(16)) ?? rs(16)}
-          subtitleSize={fs(rs(12)) ?? rs(12)}
-          chevronSize={fs(rs(18)) ?? rs(18)}
-          titleLineHeight={lh(16)}
-          subtitleLineHeight={lh(12)}
+          fontSize={segmentFontSize}
+          liquid={liquid}
+          idleFill={idleFill}
         />
+        <MethodSegment
+          label={t('fulfillment.delivery')}
+          selected={method === 'delivery'}
+          onPress={() => setFulfillment('delivery')}
+          colors={colors}
+          fontSize={segmentFontSize}
+          liquid={liquid}
+          idleFill={idleFill}
+        />
+      </LiquidSurface>
 
+      <LiquidSurface
+        style={[styles.card, { borderColor: cardBorder }]}
+        backgroundColor={colors.card}
+        glassStyle="regular"
+        interactive
+        cornerRadius={16}>
         {method === 'pickup' ? (
-          <View style={styles.accordionBody}>
+          <View>
             <Text
               style={[
                 styles.hintLabel,
@@ -268,11 +284,11 @@ export const FulfillmentCheckoutSection = forwardRef<
                         styles.emptyTitle,
                         { color: colors.text, fontSize: fs(rs(15)), lineHeight: lh(15) },
                       ]}>
-                      {t('fulfillment.noPickupYet')}
+                      {t('fulfillment.selfPickup')}
                     </Text>
                     <Text
                       style={{ color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }}>
-                      {t('fulfillment.noPickupHint')}
+                      {t('fulfillment.choosePickup')}
                     </Text>
                   </View>
                 ) : (
@@ -372,37 +388,16 @@ export const FulfillmentCheckoutSection = forwardRef<
               </>
             )}
           </View>
-        ) : null}
-      </View>
-
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, padding: 0 }]}>
-        <View style={{ padding: 16, paddingBottom: method === 'delivery' ? 12 : 16 }}>
-          <AccordionHeader
-            title={t('fulfillment.delivery')}
-            subtitle={t('fulfillment.tapToDeliver')}
-            open={method === 'delivery'}
-            onPress={() => setFulfillment('delivery')}
-            colors={colors}
-            titleSize={fs(rs(16)) ?? rs(16)}
-            subtitleSize={fs(rs(12)) ?? rs(12)}
-            chevronSize={fs(rs(18)) ?? rs(18)}
-            titleLineHeight={lh(16)}
-            subtitleLineHeight={lh(12)}
+        ) : (
+          <AddressCheckoutSection
+            ref={addressRef}
+            token={token}
+            onError={onError}
+            onSelectionChange={onAddressSelectionChange}
+            embedded
           />
-        </View>
-
-        {method === 'delivery' ? (
-          <View style={styles.deliveryBody}>
-            <AddressCheckoutSection
-              ref={addressRef}
-              token={token}
-              onError={onError}
-              onSelectionChange={onAddressSelectionChange}
-              embedded
-            />
-          </View>
-        ) : null}
-      </View>
+        )}
+      </LiquidSurface>
     </View>
   );
 });
@@ -416,36 +411,32 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingVertical: 2,
   },
+  segmentTrack: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 14,
+    gap: 4,
+  },
+  segment: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentLabel: {
+    textAlign: 'center',
+    paddingVertical: 2,
+  },
   card: {
     borderWidth: 1,
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
-  },
-  accordionHeader: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 14,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  accordionHeaderText: {
-    flex: 1,
-    minWidth: 0,
-    paddingRight: 10,
-    paddingVertical: 2,
-  },
-  accordionTitle: {
-    fontWeight: '600',
-  },
-  accordionChevron: {
-    marginTop: 2,
-    paddingVertical: 2,
-  },
-  accordionBody: {
-    marginTop: 14,
   },
   hintLabel: {
     fontWeight: '700',
@@ -507,9 +498,5 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-  },
-  deliveryBody: {
-    paddingHorizontal: 0,
-    paddingTop: 4,
   },
 });

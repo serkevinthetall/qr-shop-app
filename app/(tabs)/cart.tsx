@@ -13,13 +13,14 @@ import { useAppColors } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import { formatPrice } from '@/types/product';
 import { withHapticPress } from '@/utils/haptics';
-import { liquidTabBarClearance } from '@/utils/liquid-ui';
+import { liquidTabBarClearance, tabScreenBottomPadding } from '@/utils/liquid-ui';
 
 export default function CartScreen() {
   const router = useRouter();
   const colors = useAppColors();
   const insets = useSafeAreaInsets();
-  const { rs, horizontalPadding, contentMaxWidth } = useResponsive();
+  const { rs, horizontalPadding, contentMaxWidth, isWebsiteLayout } = useResponsive();
+  const topEdges = isWebsiteLayout ? ([] as const) : (['top'] as const);
   const tabBarScrollProps = useLiquidTabBarScrollProps();
   const {
     productItems,
@@ -56,7 +57,7 @@ export default function CartScreen() {
 
   if (!listData.length) {
     return (
-      <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
+      <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={topEdges}>
         <View style={[styles.emptyWrap, { paddingHorizontal: horizontalPadding }]}>
           <Text style={[styles.emptyText, { color: colors.textMuted, fontSize: fs(rs(15)), lineHeight: lh(15) }]}>
             {t('cart.empty')}
@@ -67,7 +68,7 @@ export default function CartScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={topEdges}>
       <View style={[styles.content, { paddingHorizontal: horizontalPadding, maxWidth: contentMaxWidth, alignSelf: 'center', width: '100%' }]}>
         <FlatList
           data={listData}
@@ -161,7 +162,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   listContent: {
-    paddingBottom: 120,
+    paddingBottom: tabScreenBottomPadding(),
     paddingRight: 4,
   },
   emptyWrap: {

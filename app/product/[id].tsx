@@ -39,7 +39,7 @@ export default function ProductDetailScreen() {
   const { token } = useAuth();
   const { addToCart } = useCart();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const productId = Number(id);
+  const productId = String(id ?? '');
 
   const labels =
     language === 'my'
@@ -70,9 +70,7 @@ export default function ProductDetailScreen() {
 
   const languageRef = useRef(language);
   const requestGenerationRef = useRef(0);
-  const [product, setProduct] = useState<Product | null>(() =>
-    Number.isFinite(productId) ? getProductPreview(productId) : null,
-  );
+  const [product, setProduct] = useState<Product | null>(() => getProductPreview(productId));
   const [similar, setSimilar] = useState<Product[]>([]);
   const [similarLoading, setSimilarLoading] = useState(false);
   const [detailsLoaded, setDetailsLoaded] = useState(false);
@@ -87,7 +85,7 @@ export default function ProductDetailScreen() {
 
   const loadProduct = useCallback(
     async (options?: { silent?: boolean }) => {
-      if (!Number.isFinite(productId)) {
+      if (!productId) {
         return;
       }
 
@@ -182,7 +180,7 @@ export default function ProductDetailScreen() {
 
   useEffect(() => {
     return onCatalogRefreshRequested(() => {
-      if (!Number.isFinite(productId)) {
+      if (!productId) {
         return;
       }
 

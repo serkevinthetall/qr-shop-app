@@ -70,10 +70,10 @@ export default function NotificationsScreen() {
     const body =
       item.type === 'product'
         ? `${item.product_name} — ${t('notifications.newProductBody')}`
-        : t('notifications.newCouponBody', { code: item.coupon_code });
+        : t('notifications.newCouponBody', { code: item.coupon_code || '' });
 
     const onPress = () => {
-      if (item.type === 'product') {
+      if (item.type === 'product' && item.product_id) {
         router.push(`/product/${item.product_id}` as Href);
       }
     };
@@ -96,11 +96,13 @@ export default function NotificationsScreen() {
           <Text style={[styles.itemText, { color: colors.textMuted, fontSize: fs(13) }]}>{body}</Text>
           {item.type === 'coupon' ? (
             <Text style={[styles.itemMeta, { color: colors.primary, fontSize: fs(12), lineHeight: lh(12) }]}>
-              {t('notifications.couponAmount', { amount: formatPrice(item.amount) })}
+              {t('notifications.couponAmount', {
+                amount: formatPrice(Number(item.amount) || 0),
+              })}
             </Text>
           ) : null}
           <Text style={[styles.itemTime, { color: colors.textMuted, fontSize: fs(11), lineHeight: lh(11) }]}>
-            {getRelativeTime(item.date)}
+            {getRelativeTime(item.date || item.create_date || '')}
           </Text>
         </View>
         {item.type === 'product' ? (

@@ -4,8 +4,13 @@ import {
 } from 'expo-glass-effect';
 import { Platform } from 'react-native';
 
+import { isWebsiteLayoutNow } from '@/hooks/use-responsive';
+
 /** Floating glass pill height (matches tab layout). */
 export const LIQUID_TAB_PILL_HEIGHT = 68;
+
+/** Flat Android tab content height (matches `app/(tabs)/_layout.tsx`). */
+export const ANDROID_TAB_BAR_CONTENT_HEIGHT = 58;
 
 /**
  * Liquid UI — iOS 26+ only when native glass APIs exist.
@@ -38,6 +43,24 @@ export function liquidTabBarClearance(bottomInset: number): number {
   }
 
   return LIQUID_TAB_PILL_HEIGHT + Math.max(bottomInset, 12);
+}
+
+/**
+ * Scroll/list padding under the last item on tab screens.
+ * Liquid iOS: clear the floating pill. Flat Android/iOS: tab bar already
+ * reserves layout space — keep a small gap only.
+ * Website (wide browser): no bottom tab bar — modest page padding only.
+ */
+export function tabScreenBottomPadding(): number {
+  if (isWebsiteLayoutNow()) {
+    return 48;
+  }
+
+  if (isLiquidTabBarEnabled()) {
+    return LIQUID_TAB_PILL_HEIGHT + 28;
+  }
+
+  return 28;
 }
 
 /** Match app theme for GlassView colorScheme. */

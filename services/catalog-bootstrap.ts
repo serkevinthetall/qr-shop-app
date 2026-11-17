@@ -1,4 +1,3 @@
-import { fetchMembership, fetchMembershipCoupons } from '@/services/membership-api';
 import { fetchOrders, type Order } from '@/services/order-api';
 import { fetchCategories, fetchProducts } from '@/services/product-api';
 import type { Membership, MembershipCoupon } from '@/types/membership';
@@ -76,20 +75,18 @@ export async function prefetchSessionBootstrap(token: string): Promise<SessionBo
   }
 
   inflight = (async () => {
-    const [products, categories, membershipResult, coupons, orders] = await Promise.all([
+    const [products, categories, orders] = await Promise.all([
       fetchProducts(INITIAL_PRODUCT_LIMIT, 0, null, token),
       fetchCategories().catch(() => [] as Category[]),
-      fetchMembership(token).catch(() => ({ membership: null as Membership | null, memberCode: '' })),
-      fetchMembershipCoupons(token).catch(() => [] as MembershipCoupon[]),
       fetchOrders(token).catch(() => [] as Order[]),
     ]);
 
     bootstrap = {
       catalog: { products, categories },
       account: {
-        membership: membershipResult.membership,
-        memberCode: membershipResult.memberCode,
-        coupons,
+        membership: null,
+        memberCode: '',
+        coupons: [],
       },
       orders,
     };
@@ -119,7 +116,7 @@ export async function prefetchCatalog(token?: string) {
   const catalog = { products, categories };
   bootstrap = {
     catalog,
-    account: null,
+    account: { membership: null, memberCode: '', coupons: [] },
     orders: null,
   };
   return catalog;

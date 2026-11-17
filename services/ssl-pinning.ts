@@ -5,49 +5,18 @@ import {
 } from 'react-native-ssl-public-key-pinning';
 
 /**
- * SPKI (SHA-256) pins for API hosts — leaf + intermediate.
- * Keep in sync with plugins/okhttp-doh/DohOkHttpClientFactory.kt (Android).
- * Rotate when a host changes CA / certificate chain.
- *
- * Android pinning is enforced natively via OkHttp CertificatePinner (DoH factory).
- * iOS pinning is enabled here via TrustKit (react-native-ssl-public-key-pinning).
- * Do not initialize this library on Android — it can replace our OkHttp client and
- * break Cloudflare DoH.
+ * Pin map empty during Platform API cutover — TrustKit only enforces listed
+ * hosts. api.qrshopmyanmar.com / localhost use normal TLS until SPKI hashes
+ * are measured and added here.
  */
-const API_PINNING_OPTIONS = {
-  'www.qrshop.online': {
-    includeSubdomains: false,
-    publicKeyHashes: [
-      '3+zn2KT/mOeNBAcChjtnx3e0d4rIsPBtO9Gcigc4Qf8=',
-      'nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E=',
-    ],
-  },
-  'qrshop.online': {
-    includeSubdomains: false,
-    publicKeyHashes: [
-      '3+zn2KT/mOeNBAcChjtnx3e0d4rIsPBtO9Gcigc4Qf8=',
-      'nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E=',
-    ],
-  },
-  'qr-shop-app-backend.vercel.app': {
-    includeSubdomains: false,
-    publicKeyHashes: [
-      'xRUwi70J41GFIbtkDY38VXIAoWtbsGGG+LWfenCZh7k=',
-      'yDu9og255NN5GEf+Bwa9rTrqFQ0EydZ0r1FCh9TdAW4=',
-    ],
-  },
-  'qrshopmyanmar.netlify.app': {
-    includeSubdomains: false,
-    publicKeyHashes: [
-      'DFv0rPImhleLzIvctvEusBa5wnzQ/+aSqyW18y26L+s=',
-      'Wec45nQiFwKvHtuHxSAMGkt19k+uPSw9JlEkxhvYPHk=',
-    ],
-  },
-};
+const API_PINNING_OPTIONS: Record<
+  string,
+  { includeSubdomains: boolean; publicKeyHashes: string[] }
+> = {};
 
 /**
  * Enable iOS SSL public-key pinning as early as possible.
- * Safe no-op on web, Android, and Expo Go (native module missing).
+ * Safe no-op on web, Android, Expo Go, or when no hosts are pinned.
  */
 export async function initSslPinning(): Promise<void> {
   if (Platform.OS !== 'ios') {
@@ -55,6 +24,10 @@ export async function initSslPinning(): Promise<void> {
   }
 
   if (!isSslPinningAvailable()) {
+    return;
+  }
+
+  if (Object.keys(API_PINNING_OPTIONS).length === 0) {
     return;
   }
 

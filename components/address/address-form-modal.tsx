@@ -26,7 +26,7 @@ type AddressFormModalProps = {
   token: string;
   address?: Address | null;
   onDismiss: () => void;
-  onSaved: (addressId: number) => void;
+  onSaved: (addressId: string) => void;
 };
 
 export function AddressFormModal({

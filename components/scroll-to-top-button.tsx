@@ -24,8 +24,8 @@ type ScrollToTopButtonProps = {
 };
 
 /**
- * Option A — solid circular ↑↑ control matched to the bottom nav (no glass).
- * Soft float bob while visible; sits above flat tab bar or liquid pill.
+ * Solid circular ↑↑ control matched to the bottom nav.
+ * Soft float bob on liquid iOS only; Android stays still just above the tab bar.
  */
 export function ScrollToTopButton({
   visible,
@@ -59,9 +59,9 @@ export function ScrollToTopButton({
   useEffect(() => {
     floatLoopRef.current?.stop();
     floatLoopRef.current = null;
+    floatY.setValue(0);
 
-    if (!visible) {
-      floatY.setValue(0);
+    if (!visible || !floating) {
       return;
     }
 
@@ -87,8 +87,9 @@ export function ScrollToTopButton({
     return () => {
       loop.stop();
     };
-  }, [floatY, visible]);
+  }, [floatY, floating, visible]);
 
+  // Liquid iOS clears the floating pill; Android content already ends above the bar.
   const bottom = floating ? liquidTabBarClearance(insets.bottom) + 10 : 12;
 
   return (
@@ -156,7 +157,7 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 4 },
       },
       android: {
-        elevation: 6,
+        elevation: 3,
       },
       default: {},
     }),

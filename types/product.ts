@@ -1,6 +1,7 @@
 import { getApiBaseUrl } from '@/constants/api';
+import { resolvePlatformMediaUrl } from '@/services/platform-envelope';
 
-export type CategoryRef = [number, string] | false;
+export type CategoryRef = [string, string] | false;
 
 export type ProductRibbon = {
   name: string;
@@ -11,29 +12,39 @@ export type ProductRibbon = {
 };
 
 export type Product = {
-  id: number;
+  /** Mall composite id: shopId__productId */
+  id: string;
+  /** Underlying SKU id (without shop prefix). */
+  productId?: string;
+  shopId?: string;
+  shopName?: string;
   name: string;
   list_price: number;
+  priceB2bKs?: number | null;
+  wholesaleMinQty?: number | null;
+  stock?: number;
+  canOrder?: boolean;
   description_sale?: string | false;
   description?: string | false;
   description_ecommerce?: string | false;
   website_description?: string | false;
   categ_id: CategoryRef;
-  public_categ_ids?: number[];
-  /** Personalization tag names (excludes the app gate tag "QR App"). */
+  public_categ_ids?: string[];
+  /** Unused on Platform — kept for older UI helpers. */
   tags?: string[];
   image_url?: string | false;
   image_1920?: string | false;
   write_date?: string | false;
   ribbon?: ProductRibbon | null;
+  compare_at?: number | null;
 };
 
-/** Sentinel for the Just for you category chip (not an Odoo public category id). */
+/** Sentinel for the Just for you category chip (hidden without membership). */
 export const JUST_FOR_YOU = 'just_for_you' as const;
-export type CategorySelection = number | null | typeof JUST_FOR_YOU;
+export type CategorySelection = string | null | typeof JUST_FOR_YOU;
 
 export type Category = {
-  id: number;
+  id: string;
   name: string;
   parent_id: CategoryRef;
 };
@@ -72,32 +83,19 @@ function getImageVersion(writeDate?: string | false) {
   return encodeURIComponent(writeDate.replace(/[^0-9]/g, '') || '0');
 }
 
-export function getProductImageUri(product: Pick<Product, 'id' | 'image_url' | 'image_1920' | 'write_date'>) {
+export function getProductImageUri(
+  product: Pick<Product, 'id' | 'image_url' | 'image_1920' | 'write_date'>,
+) {
   if (product.image_url) {
-    const url = product.image_url.trim();
-
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return url;
-    }
-
-    if (url.startsWith('/')) {
-      if (url.includes('?v=')) {
-        return `${getApiBaseUrl()}${url}`;
-      }
-
-      const version = getImageVersion(product.write_date);
-      return `${getApiBaseUrl()}${url}?v=${version}`;
-    }
-
-    return url;
+    const url = String(product.image_url).trim();
+    return resolvePlatformMediaUrl(getApiBaseUrl(), url);
   }
 
   if (product.image_1920) {
     return `data:image/png;base64,${product.image_1920}`;
   }
 
-  const version = getImageVersion(product.write_date);
-  return `${getApiBaseUrl()}/api/products/${product.id}/image?v=${version}`;
+  return '';
 }
 
 export function getProductImageCacheKey(product: Pick<Product, 'id' | 'write_date'>) {

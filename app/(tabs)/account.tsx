@@ -68,9 +68,13 @@ import {
   liquidGlassBorder,
   liquidGlassFill,
   liquidGlassTint,
+  tabScreenBottomPadding,
 } from '@/utils/liquid-ui';
 
 const ACCOUNT_SYNC_INTERVAL_MS = 20000;
+/** Membership + push notifications left out of Platform API cutover. */
+const SHOW_MEMBERSHIP_FEATURES = false;
+const SHOW_NOTIFICATIONS = false;
 
 function formatSupportPhone(display: string) {
   const digits = display.replace(/\D/g, '');
@@ -157,7 +161,7 @@ export default function AccountScreen() {
   const router = useRouter();
   const colors = useAppColors();
   const { theme, preference, followSystem, setFollowSystem, setPreference, isDark } = useThemeMode();
-  const { rs, horizontalPadding, contentMaxWidth } = useResponsive();
+  const { rs, horizontalPadding, contentMaxWidth, isWebsiteLayout } = useResponsive();
   const { user, token, signOut } = useAuth();
   const { t, fs, lh } = useLanguage();
   const { unreadCount } = useNotifications();
@@ -192,6 +196,15 @@ export default function AccountScreen() {
       return;
     }
 
+    if (!SHOW_MEMBERSHIP_FEATURES) {
+      const profile = await fetchCustomerProfile(token).catch(() => null);
+      setMembership(null);
+      setCoupon(null);
+      setUpgradePending(false);
+      setContact(resolveContactInfo(profile, user));
+      return;
+    }
+
     const [membershipResult, couponsData, profile, pending] = await Promise.all([
       fetchMembership(token),
       fetchMembershipCoupons(token),
@@ -209,7 +222,6 @@ export default function AccountScreen() {
       }
       setUpgradePending(false);
     } else {
-      // Odoo application Requested → Processing; none / closed → Registered (+ Apply).
       setUpgradePending(!!pending);
     }
   }, [token, user]);
@@ -355,14 +367,18 @@ export default function AccountScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.centered, { backgroundColor: colors.background }]} edges={['top']}>
+      <SafeAreaView
+        style={[styles.centered, { backgroundColor: colors.background }]}
+        edges={isWebsiteLayout ? [] : ['top']}>
         <ActivityIndicator size="large" color={colors.primary} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView
+      style={[styles.screen, { backgroundColor: colors.background }]}
+      edges={isWebsiteLayout ? [] : ['top']}>
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -391,7 +407,7 @@ export default function AccountScreen() {
           interactive>
           <InfoRow label={t('account.myName')} value={user?.name ?? '-'} colors={colors} rs={rs} fs={fs} lh={lh} />
 
-          {showUpgradePending ? (
+          {SHOW_MEMBERSHIP_FEATURES && showUpgradePending ? (
             <View style={styles.infoRow}>
               <Text style={[styles.label, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
                 {t('account.memberStatus')}
@@ -419,7 +435,9 @@ export default function AccountScreen() {
                 </View>
               </View>
             </View>
-          ) : (
+          ) : null}
+
+          {SHOW_MEMBERSHIP_FEATURES && !showUpgradePending ? (
             <InfoRow
               label={t('account.memberStatus')}
               value={memberStatusLabel}
@@ -428,9 +446,9 @@ export default function AccountScreen() {
               fs={fs}
               lh={lh}
             />
-          )}
+          ) : null}
 
-          {!showUpgradePending ? (
+          {SHOW_MEMBERSHIP_FEATURES && !showUpgradePending ? (
             <>
               <Text style={[styles.label, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
                 {t('account.couponCode')}
@@ -599,34 +617,36 @@ export default function AccountScreen() {
           </Button>
         </LiquidSurface>
 
-        <LiquidSurface
-          style={[styles.card, { borderColor: cardBorder }]}
-          backgroundColor={colors.card}
-          glassStyle="regular"
-          interactive>
-          <Pressable
-            onPress={withHapticPress(() => router.push('/notifications' as Href))}
-            style={styles.navRow}>
-            <View style={styles.navTextWrap}>
-              <View style={styles.navTitleRow}>
-                <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
-                  {t('account.notifications')}
+        {SHOW_NOTIFICATIONS ? (
+          <LiquidSurface
+            style={[styles.card, { borderColor: cardBorder }]}
+            backgroundColor={colors.card}
+            glassStyle="regular"
+            interactive>
+            <Pressable
+              onPress={withHapticPress(() => router.push('/notifications' as Href))}
+              style={styles.navRow}>
+              <View style={styles.navTextWrap}>
+                <View style={styles.navTitleRow}>
+                  <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
+                    {t('account.notifications')}
+                  </Text>
+                  {unreadCount > 0 ? (
+                    <View style={[styles.badge, { backgroundColor: colors.danger }]}>
+                      <Text style={[styles.badgeText, { color: colors.onPrimary }]}>
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={[styles.themeSubtitle, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
+                  {t('account.notificationsSubtitle')}
                 </Text>
-                {unreadCount > 0 ? (
-                  <View style={[styles.badge, { backgroundColor: colors.danger }]}>
-                    <Text style={[styles.badgeText, { color: colors.onPrimary }]}>
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </Text>
-                  </View>
-                ) : null}
               </View>
-              <Text style={[styles.themeSubtitle, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
-                {t('account.notificationsSubtitle')}
-              </Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={16} color={colors.textMuted} />
-          </Pressable>
-        </LiquidSurface>
+              <MaterialCommunityIcons name="chevron-right" size={16} color={colors.textMuted} />
+            </Pressable>
+          </LiquidSurface>
+        ) : null}
 
         <LiquidSurface
           style={[styles.card, { borderColor: cardBorder }]}
@@ -820,12 +840,14 @@ export default function AccountScreen() {
         </LiquidSurface>
       </ScrollView>
 
-      <MembershipUpgradeModal
-        visible={upgradeModalVisible}
-        isSubmitting={isSubmittingUpgrade}
-        onClose={closeUpgradeModal}
-        onSelectPlan={handleSelectPlan}
-      />
+      {SHOW_MEMBERSHIP_FEATURES ? (
+        <MembershipUpgradeModal
+          visible={upgradeModalVisible}
+          isSubmitting={isSubmittingUpgrade}
+          onClose={closeUpgradeModal}
+          onSelectPlan={handleSelectPlan}
+        />
+      ) : null}
 
       <Modal
         visible={phoneActionsVisible}
@@ -956,7 +978,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingTop: 16,
-    paddingBottom: 120,
+    paddingBottom: tabScreenBottomPadding(),
   },
   card: {
     borderWidth: 1,

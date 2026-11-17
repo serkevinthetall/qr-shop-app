@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
 import { useLiquidTabBarScrollProps } from '@/contexts/liquid-tab-bar-visibility';
 import { useAppColors, useThemeMode } from '@/contexts/theme-context';
+import { useResponsive } from '@/hooks/use-responsive';
 import { takeOrdersBootstrap } from '@/services/catalog-bootstrap';
 import { getUserFacingError } from '@/services/auth-error';
 import { inputCaretProps, searchbarInputStyleFor } from '@/constants/text-input';
@@ -29,12 +30,15 @@ import {
   getDeliveryStatusHint,
   getOrderDeliveryStatus,
   getOrderShippingLabel,
+  getPickupPlaceLabel,
   getStatusLabel,
+  orderHasPickupNotice,
   type DeliveryStatus,
   type Order,
 } from '@/services/order-api';
 import { formatPrice } from '@/types/product';
 import { formatMyanmarDateTime, parseOdooUtcDate } from '@/utils/datetime';
+import { tabScreenBottomPadding } from '@/utils/liquid-ui';
 type AppColors = ReturnType<typeof useAppColors>;
 type Language = ReturnType<typeof useLanguage>;
 
@@ -208,12 +212,18 @@ function OrderCard({
   const deliveryStatus = getOrderDeliveryStatus(order);
   const statusBadge = getStatusBadgeColors(deliveryStatus, colors);
   const shippingLabel = getOrderShippingLabel(order);
-  const pickupPreview =
-    order.fulfillment_method === 'pickup' && order.pickup_point?.name
-      ? `${lang.t('orderDetail.pickupPoint')} · ${order.pickup_point.name}`
-      : '';
-  const shippingPreview =
-    pickupPreview || shippingLabel.split('\n').filter(Boolean).slice(0, 2).join(' · ');
+  const isPickupOrder = orderHasPickupNotice(order);
+  const pickupLabel = lang.t('orderDetail.pickupPoint');
+  const pickupPlace = getPickupPlaceLabel(order, pickupLabel);
+  const pickupPreview = isPickupOrder
+    ? pickupPlace
+      ? `${pickupLabel} · ${pickupPlace.split('\n')[0]}`
+      : pickupLabel
+    : '';
+  // Pickup notice in delivery notes → never show Contact shipping address.
+  const shippingPreview = isPickupOrder
+    ? pickupPreview
+    : shippingLabel.split('\n').filter(Boolean).slice(0, 2).join(' · ');
   const statusHint = getDeliveryStatusHint(order, lang.t);
 
   return (
@@ -313,11 +323,13 @@ export default function OrdersScreen() {
   const { isDark } = useThemeMode();
   const lang = useLanguage();
   const { token } = useAuth();
+  const { isWebsiteLayout } = useResponsive();
   const tabBarScrollProps = useLiquidTabBarScrollProps();
+  const topEdges = isWebsiteLayout ? ([] as const) : (['top'] as const);
 
   const [ordersSeed] = useState(() => takeOrdersBootstrap());
   const [orders, setOrders] = useState<Order[]>(ordersSeed ?? []);
-  const [itemCounts, setItemCounts] = useState<Record<number, number>>({});
+  const [itemCounts, setItemCounts] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(!ordersSeed);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -409,7 +421,7 @@ export default function OrdersScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
+      <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={topEdges}>
         <View style={styles.searchRow}>
           <Searchbar
             value=""
@@ -439,7 +451,7 @@ export default function OrdersScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={topEdges}>
       <View style={styles.searchRow}>
         <Searchbar
           value={search}
@@ -576,7 +588,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   chipText: { fontWeight: '700' },
-  listContent: { paddingHorizontal: 16, paddingBottom: 120 },
+  listContent: { paddingHorizontal: 16, paddingBottom: tabScreenBottomPadding() },
 
   // Each order = its own grey block, NOT one continuous list
   card: {

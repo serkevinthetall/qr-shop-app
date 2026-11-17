@@ -60,9 +60,11 @@ type ProductCardProps = {
   width?: number;
 };
 
-function useProductCartQty(productId: number) {
+function useProductCartQty(productId: string) {
   const { productItems } = useCart();
-  return productItems.find((item) => item.product.id === productId)?.quantity ?? 0;
+  return productItems.find(
+    (item) => String(item.product.id) === String(productId),
+  )?.quantity ?? 0;
 }
 
 function CardQtyControl({

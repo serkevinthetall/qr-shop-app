@@ -2,7 +2,7 @@
   "expo": {
     "name": "QR Shop",
     "slug": "qr-shop-app",
-    "version": "1.4.7",
+    "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "qrapp",
@@ -21,11 +21,11 @@
           "itms-apps"
         ]
       },
-      "buildNumber": "30"
+      "buildNumber": "1"
     },
     "android": {
       "package": "com.qrshop.myanmar",
-      "versionCode": 33,
+      "versionCode": 34,
       "playStoreUrl": "https://play.google.com/store/apps/details?id=com.qrshop.myanmar",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
@@ -33,7 +33,6 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [

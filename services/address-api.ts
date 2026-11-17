@@ -1,18 +1,20 @@
 import { apiRequest } from '@/services/api-client';
 import { throwIfUnauthorized } from '@/services/auth-error';
 import { getApiFallbackMessage } from '@/services/network-error';
+import { platformErrorMessage, unwrapPlatformData } from '@/services/platform-envelope';
 import type {
   Address,
   AddressMeta,
   CreateAddressPayload,
 } from '@/types/address';
 
-type ApiErrorResponse = {
-  success: false;
-  message: string;
-  details?: string | {
-    code?: string;
-  };
+type PlatformAddress = {
+  id: string;
+  label: string;
+  street: string;
+  townshipId: string;
+  location: string;
+  isDefault: boolean;
 };
 
 export class AddressApiError extends Error {
@@ -25,122 +27,121 @@ export class AddressApiError extends Error {
   }
 }
 
-function throwAddressApiError(
-  data: ApiErrorResponse | { success: boolean; message?: string; details?: { code?: string } } | null,
-  fallback: string,
-): never {
-  const message = getApiError(data, fallback);
-  const code =
-    data && typeof data.details === 'object' && data.details ? data.details.code : undefined;
-  throw new AddressApiError(message, code);
+function mapAddress(address: PlatformAddress): Address {
+  return {
+    id: String(address.id),
+    name: String(address.label || ''),
+    phone: false,
+    street: address.street ? String(address.street) : false,
+    street2: false,
+    city: address.location ? String(address.location) : false,
+    zip: address.townshipId ? String(address.townshipId) : false,
+    state_id: false,
+    country_id: false,
+    parent_id: false,
+    isDefault: Boolean(address.isDefault),
+  };
 }
 
-type AddressesResponse = {
-  success: true;
-  addresses: Address[];
-};
-
-type AddressMetaResponse = {
-  success: true;
-  country_id: number;
-  states: AddressMeta['states'];
-};
-
-type CreateAddressResponse = {
-  success: true;
-  message: string;
-  address_id: number;
-};
-
-function getApiError(
-  data: { success: boolean; message?: string; details?: string | { code?: string } } | null,
-  fallback: string,
-) {
-  if (data && 'message' in data && data.message) {
-    if (typeof data.details === 'string' && data.details.trim()) {
-      return `${data.message}: ${data.details}`;
-    }
-
-    return data.message;
-  }
-
-  return fallback;
+function throwAddressApiError(data: unknown, fallback: string): never {
+  const code =
+    data && typeof data === 'object'
+      ? (data as { error?: { code?: string } }).error?.code
+      : undefined;
+  throw new AddressApiError(platformErrorMessage(data, fallback), code);
 }
 
 export async function fetchAddresses(token: string) {
-  const { response, data } = await apiRequest<AddressesResponse | ApiErrorResponse>(
+  const { response, data } = await apiRequest<unknown>(
     '/api/addresses',
     { token },
   );
 
   throwIfUnauthorized(response);
-  if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, getApiFallbackMessage('loadAddresses')));
+  const addresses = unwrapPlatformData<PlatformAddress[]>(data);
+  if (!response.ok || !addresses) {
+    throw new Error(platformErrorMessage(data, getApiFallbackMessage('loadAddresses')));
   }
 
-  return data.addresses;
+  return addresses.map(mapAddress);
 }
 
 export async function fetchAddressMeta(token: string) {
-  const { response, data } = await apiRequest<AddressMetaResponse | ApiErrorResponse>(
-    '/api/addresses/meta',
+  const { response, data } = await apiRequest<unknown>(
+    '/api/townships',
     { token },
   );
 
   throwIfUnauthorized(response);
-  if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, getApiFallbackMessage('loadAddresses')));
+  const townships = unwrapPlatformData<{ id: string; name: string }[]>(data);
+  if (!response.ok || !townships) {
+    throw new Error(platformErrorMessage(data, getApiFallbackMessage('loadAddresses')));
   }
 
   return {
-    country_id: data.country_id,
-    states: data.states,
+    country_id: 156,
+    states: townships.map((township) => ({
+      id: String(township.id),
+      name: String(township.name),
+    })),
   } satisfies AddressMeta;
 }
 
 export async function createAddress(token: string, payload: CreateAddressPayload) {
-  const { response, data } = await apiRequest<CreateAddressResponse | ApiErrorResponse>(
+  const { response, data } = await apiRequest<unknown>(
     '/api/addresses',
     {
       method: 'POST',
       token,
-      body: payload,
+      body: {
+        label: payload.name,
+        street: payload.street,
+        townshipId: payload.townshipId,
+        isDefault: payload.isDefault,
+      },
     },
   );
 
   throwIfUnauthorized(response);
-  if (!response.ok || !data || !data.success) {
+  const address = unwrapPlatformData<PlatformAddress>(data);
+  if (!response.ok || !address) {
     throwAddressApiError(data, getApiFallbackMessage('generic'));
   }
 
-  return data.address_id;
+  return String(address.id);
 }
 
 export async function updateAddress(
   token: string,
-  addressId: number,
+  addressId: string,
   payload: Partial<CreateAddressPayload>,
 ) {
-  const { response, data } = await apiRequest<{ success: true; message: string } | ApiErrorResponse>(
-    `/api/addresses/${addressId}`,
+  const { response, data } = await apiRequest<unknown>(
+    `/api/addresses/${encodeURIComponent(addressId)}`,
     {
-      method: 'PUT',
+      method: 'PATCH',
       token,
-      body: payload,
+      body: {
+        ...(payload.name !== undefined ? { label: payload.name } : {}),
+        ...(payload.street !== undefined ? { street: payload.street } : {}),
+        ...(payload.townshipId !== undefined ? { townshipId: payload.townshipId } : {}),
+        ...(payload.isDefault !== undefined ? { isDefault: payload.isDefault } : {}),
+      },
     },
   );
 
   throwIfUnauthorized(response);
-  if (!response.ok || !data || !data.success) {
+  const address = unwrapPlatformData<PlatformAddress>(data);
+  if (!response.ok || !address) {
     throwAddressApiError(data, getApiFallbackMessage('generic'));
   }
 
-  return data;
+  return mapAddress(address);
 }
 
-export async function deleteAddress(token: string, addressId: number) {
-  const { response, data } = await apiRequest<{ success: true; message: string } | ApiErrorResponse>(
-    `/api/addresses/${addressId}`,
+export async function deleteAddress(token: string, addressId: string) {
+  const { response, data } = await apiRequest<unknown>(
+    `/api/addresses/${encodeURIComponent(addressId)}`,
     {
       method: 'DELETE',
       token,
@@ -148,9 +149,10 @@ export async function deleteAddress(token: string, addressId: number) {
   );
 
   throwIfUnauthorized(response);
-  if (!response.ok || !data || !data.success) {
-    throw new Error(getApiError(data, getApiFallbackMessage('deleteAddress')));
+  const result = unwrapPlatformData<{ deleted: boolean }>(data);
+  if (!response.ok || !result) {
+    throw new Error(platformErrorMessage(data, getApiFallbackMessage('deleteAddress')));
   }
 
-  return data;
+  return result;
 }

@@ -3,8 +3,6 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 
 import { useAuth } from '@/contexts/auth-context';
 import {
-  deliveryFeeToProduct,
-  fetchDeliveryFeeQuote,
   isDeliveryCartProduct,
 } from '@/services/delivery-fee-api';
 import type { Product } from '@/types/product';
@@ -26,13 +24,13 @@ type CartContextValue = {
   /** True while a delivery-fee quote request is in flight. */
   isDeliveryFeeLoading: boolean;
   addToCart: (product: Product, quantity?: number) => void;
-  removeFromCart: (productId: number) => void;
-  updateQuantity: (productId: number, quantity: number) => void;
+  removeFromCart: (productId: string | number) => void;
+  updateQuantity: (productId: string | number, quantity: number) => void;
   clearCart: () => void;
   syncPricesFromProducts: (products: Product[]) => void;
   /** Refresh Delivery line from main address or a specific checkout branch. */
   syncDeliveryFee: (options?: {
-    addressId?: number | null;
+    addressId?: string | null;
     zip?: string;
     /** When pickup, strip Delivery line (fee always free). */
     mode?: 'delivery' | 'pickup';
@@ -45,25 +43,12 @@ function withoutDelivery(items: CartItem[]) {
   return items.filter((item) => !isDeliveryCartProduct(item.product));
 }
 
-function withDeliveryFee(items: CartItem[], feeProduct: Product | null) {
-  const base = withoutDelivery(items);
-
-  if (!feeProduct || !base.length) {
-    return base;
-  }
-
-  return [...base, { product: feeProduct, quantity: 1 }];
-}
-
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
   const [isReady, setIsReady] = useState(false);
   const [isDeliveryFeeLoading, setIsDeliveryFeeLoading] = useState(false);
   const wasLoggedIn = useRef(false);
-  const syncSeq = useRef(0);
-  const itemsRef = useRef(items);
-  itemsRef.current = items;
 
   useEffect(() => {
     AsyncStorage.getItem(CART_KEY)
@@ -98,61 +83,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const syncDeliveryFee = useCallback(
     async (
       options: {
-        addressId?: number | null;
+        addressId?: string | null;
         zip?: string;
         mode?: 'delivery' | 'pickup';
       } = {},
     ) => {
-      const seq = ++syncSeq.current;
-      setIsDeliveryFeeLoading(true);
-
-      if (!token) {
-        setIsDeliveryFeeLoading(false);
-        setItems((current) => withoutDelivery(current));
-        return;
-      }
-
-      if (options.mode === 'pickup') {
-        setIsDeliveryFeeLoading(false);
-        setItems((current) => withoutDelivery(current));
-        return;
-      }
-
-      if (!withoutDelivery(itemsRef.current).length) {
-        setIsDeliveryFeeLoading(false);
-        setItems((current) => withoutDelivery(current));
-        return;
-      }
-
-      try {
-        const quote = await fetchDeliveryFeeQuote(token, {
-          addressId: options.addressId,
-          zip: options.zip,
-        });
-
-        if (seq !== syncSeq.current) {
-          return;
-        }
-
-        if (quote.waived || !quote.fee?.template_id) {
-          setItems((current) => withoutDelivery(current));
-          return;
-        }
-
-        const feeProduct = deliveryFeeToProduct(quote.fee);
-        setItems((current) => withDeliveryFee(current, feeProduct));
-      } catch {
-        // Keep existing cart products; checkout backend still applies the final fee.
-        if (seq === syncSeq.current) {
-          // Do not strip an existing fee on a transient network error.
-        }
-      } finally {
-        if (seq === syncSeq.current) {
-          setIsDeliveryFeeLoading(false);
-        }
-      }
+      void options;
+      setIsDeliveryFeeLoading(false);
+      setItems((current) => withoutDelivery(current));
     },
-    [token],
+    [],
   );
 
   const addToCart = useCallback(
@@ -164,17 +104,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       let shouldSyncFee = false;
 
       setItems((current) => {
-        const existing = current.find((item) => item.product.id === product.id);
+        const existing = current.find(
+          (item) => String(item.product.id) === String(product.id),
+        );
         const next = existing
           ? current.map((item) =>
-              item.product.id === product.id
+              String(item.product.id) === String(product.id)
                 ? { ...item, quantity: item.quantity + quantity }
                 : item,
             )
           : [...current, { product, quantity }];
 
-        // Keep ref in sync so fee lookup does not see an empty cart.
-        itemsRef.current = next;
         shouldSyncFee = withoutDelivery(next).length > 0;
         return next;
       });
@@ -186,9 +126,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     [syncDeliveryFee],
   );
 
-  const removeFromCart = useCallback((productId: number) => {
+  const removeFromCart = useCallback((productId: string | number) => {
     setItems((current) => {
-      const next = current.filter((item) => item.product.id !== productId);
+      const next = current.filter(
+        (item) => String(item.product.id) !== String(productId),
+      );
       const productsLeft = withoutDelivery(next);
 
       // If user removed the last real product, drop delivery too.
@@ -200,26 +142,32 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const updateQuantity = useCallback((productId: number, quantity: number) => {
+  const updateQuantity = useCallback((productId: string | number, quantity: number) => {
     setItems((current) => {
-      const target = current.find((item) => item.product.id === productId);
+      const target = current.find(
+        (item) => String(item.product.id) === String(productId),
+      );
 
       if (target && isDeliveryCartProduct(target.product)) {
         // Delivery qty is always 1; quantity <= 0 removes it (user dismissed preview).
         if (quantity <= 0) {
-          return current.filter((item) => item.product.id !== productId);
+          return current.filter(
+            (item) => String(item.product.id) !== String(productId),
+          );
         }
 
         return current;
       }
 
       if (quantity <= 0) {
-        const next = current.filter((item) => item.product.id !== productId);
+        const next = current.filter(
+          (item) => String(item.product.id) !== String(productId),
+        );
         return withoutDelivery(next).length ? next : [];
       }
 
       return current.map((item) =>
-        item.product.id === productId ? { ...item, quantity } : item,
+        String(item.product.id) === String(productId) ? { ...item, quantity } : item,
       );
     });
   }, []);
