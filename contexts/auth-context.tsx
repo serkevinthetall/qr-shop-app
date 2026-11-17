@@ -5,7 +5,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 
 import { clearPreferredApiBase } from '@/constants/api';
 import { trackLoginSuccess } from '@/services/analytics';
-import { loginWithApi, logoutFromApi } from '@/services/auth-api';
+import { loginWithApi, logoutFromApi, registerBuyerWithApi } from '@/services/auth-api';
 import { clearSessionBootstrap } from '@/services/catalog-bootstrap';
 import { registerSessionExpiredHandler } from '@/services/session-expired';
 
@@ -28,11 +28,22 @@ type Session = {
   user: User;
 };
 
+export type BuyerRegisterInput = {
+  name: string;
+  phone: string;
+  email: string;
+  street: string;
+  townshipId: string;
+  password: string;
+};
+
 type AuthContextValue = {
   user: User | null;
   token: string | null;
   isLoading: boolean;
   signIn: (login: string, password: string) => Promise<string>;
+  /** Marketplace-style one-time identity + password → Platform buyer account. */
+  signUp: (input: BuyerRegisterInput) => Promise<string>;
   signOut: () => Promise<void>;
 };
 
@@ -153,6 +164,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [persistSession],
   );
 
+  const signUp = useCallback(
+    async (input: BuyerRegisterInput) => {
+      const name = input.name.trim();
+      const phone = input.phone.trim();
+      const email = input.email.trim().toLowerCase();
+      const street = input.street.trim();
+      const townshipId = input.townshipId.trim();
+      const password = input.password;
+
+      if (!name || name.length < 2) {
+        throw new Error('Please enter your name.');
+      }
+      if (!phone || phone.length < 6) {
+        throw new Error('Please enter your phone number.');
+      }
+      if (!email || !isValidEmail(email)) {
+        throw new Error('Please enter a valid email address.');
+      }
+      if (!townshipId) {
+        throw new Error('Please select your township.');
+      }
+      if (!street || street.length < 5) {
+        throw new Error('Please enter your street address.');
+      }
+      if (password.length < 4) {
+        throw new Error('Password must be at least 4 characters.');
+      }
+
+      const data = await registerBuyerWithApi({
+        name,
+        phone,
+        email,
+        street,
+        townshipId,
+        password,
+      });
+
+      await persistSession({
+        token: data.token,
+        user: data.user,
+      });
+
+      await trackLoginSuccess({
+        userId: data.user.id,
+        loginType: 'email',
+      });
+
+      return data.token;
+    },
+    [persistSession],
+  );
+
   const signOut = useCallback(async () => {
     const sessionToken = token;
 
@@ -169,8 +232,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [persistSession, token]);
 
   const value = useMemo(
-    () => ({ user, token, isLoading, signIn, signOut }),
-    [user, token, isLoading, signIn, signOut],
+    () => ({ user, token, isLoading, signIn, signUp, signOut }),
+    [user, token, isLoading, signIn, signUp, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

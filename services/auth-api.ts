@@ -103,6 +103,58 @@ export async function loginWithApi(login: string, password: string) {
   };
 }
 
+/**
+ * Same identity as Marketplace one-time checkout (name · phone · street · township)
+ * plus password so the buyer can sign in again on QR App.
+ */
+export async function registerBuyerWithApi(input: {
+  name: string;
+  phone: string;
+  email: string;
+  password: string;
+  street: string;
+  townshipId: string;
+}) {
+  const email = input.email.trim().toLowerCase();
+  const { response, data } = await apiRequest<unknown>('/api/auth/register/buyer', {
+    method: 'POST',
+    body: {
+      name: input.name.trim(),
+      phone: input.phone.trim(),
+      email,
+      password: input.password,
+      street: input.street.trim(),
+      townshipId: input.townshipId.trim(),
+      label: 'Home',
+    },
+  });
+
+  const payload = unwrapPlatformData<PlatformLoginData>(data);
+  if (!response.ok || !payload?.token || !payload.user) {
+    throw new LoginApiError(
+      platformErrorMessage(data, getApiFallbackMessage('generic')),
+      {
+        status: response.status,
+        code: platformErrorCode(data),
+      },
+    );
+  }
+
+  if (payload.user.role && payload.user.role !== 'buyer') {
+    throw new LoginApiError('This account is not a buyer account.', {
+      status: 403,
+      code: 'wrong_role',
+    });
+  }
+
+  return {
+    success: true as const,
+    message: 'OK',
+    token: payload.token,
+    user: mapLoginUser(payload.user),
+  };
+}
+
 /** Platform API has no logout endpoint — client clears the JWT locally. */
 export async function logoutFromApi(_token: string, _timeoutMs = 8000) {
   return;

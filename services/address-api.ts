@@ -66,23 +66,43 @@ export async function fetchAddresses(token: string) {
   return addresses.map(mapAddress);
 }
 
-export async function fetchAddressMeta(token: string) {
-  const { response, data } = await apiRequest<unknown>(
-    '/api/townships',
-    { token },
-  );
+export type PublishedTownship = {
+  id: string;
+  name: string;
+  nameEn?: string;
+  nameMm?: string;
+  state: string;
+  postalCode?: string;
+};
 
-  throwIfUnauthorized(response);
-  const townships = unwrapPlatformData<{ id: string; name: string }[]>(data);
+/** Public — used by register (no session) and address forms. */
+export async function fetchPublishedTownships(token?: string | null) {
+  const { response, data } = await apiRequest<unknown>('/api/townships', {
+    token: token || undefined,
+  });
+  if (token) throwIfUnauthorized(response);
+  const townships = unwrapPlatformData<PublishedTownship[]>(data);
   if (!response.ok || !townships) {
     throw new Error(platformErrorMessage(data, getApiFallbackMessage('loadAddresses')));
   }
+  return (Array.isArray(townships) ? townships : []).map((row) => ({
+    id: String(row.id),
+    name: String(row.nameEn || row.name || ''),
+    nameEn: row.nameEn ? String(row.nameEn) : undefined,
+    nameMm: row.nameMm ? String(row.nameMm) : undefined,
+    state: String(row.state || ''),
+    postalCode: row.postalCode ? String(row.postalCode) : undefined,
+  }));
+}
+
+export async function fetchAddressMeta(token: string) {
+  const townships = await fetchPublishedTownships(token);
 
   return {
     country_id: 156,
     states: townships.map((township) => ({
-      id: String(township.id),
-      name: String(township.name),
+      id: township.id,
+      name: township.name,
     })),
   } satisfies AddressMeta;
 }
