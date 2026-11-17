@@ -396,7 +396,12 @@ export async function checkoutOrder(token: string, payload: CheckoutPayload) {
     byShop.set(shopId, list);
   }
 
-  const fulfillment = payload.fulfillmentMethod === 'pickup' ? 'pickup' : 'delivery';
+  const fulfillment =
+    payload.fulfillmentMethod === 'pickup'
+      ? 'pickup'
+      : payload.fulfillmentMethod === 'express'
+        ? 'express'
+        : 'delivery';
   const payment =
     payload.paymentMethod === 'wire_transfer' ? 'kpay' : String(payload.paymentMethod || 'cod');
 
@@ -405,7 +410,10 @@ export async function checkoutOrder(token: string, payload: CheckoutPayload) {
     buyerName: payload.buyerName || undefined,
     fulfillment,
     payment,
-    address: fulfillment === 'delivery' ? payload.addressText || undefined : undefined,
+    address:
+      fulfillment === 'delivery' || fulfillment === 'express'
+        ? payload.addressText || undefined
+        : undefined,
     townshipId: payload.townshipId || undefined,
     lines: items.map((item) => ({
       productId: parseSkuId(item),

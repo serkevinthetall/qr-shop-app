@@ -85,7 +85,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       options: {
         addressId?: string | null;
         zip?: string;
-        mode?: 'delivery' | 'pickup';
+        mode?: 'delivery' | 'pickup' | 'express';
       } = {},
     ) => {
       void options;

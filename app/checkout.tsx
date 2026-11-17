@@ -19,6 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CelebrationBurst } from '@/components/celebration-burst';
 import {
     FulfillmentCheckoutSection,
+    type FulfillmentAvailability,
     type FulfillmentCheckoutHandle,
 } from '@/components/checkout/fulfillment-section';
 import { DatePickerField } from '@/components/date-picker-field';
@@ -54,62 +55,65 @@ export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const { rs, horizontalPadding, contentMaxWidth } = useResponsive();
   const { token, user } = useAuth();
-  const { productItems, totalAmount, deliveryFeeAmount, isDeliveryFeeLoading, clearCart, syncDeliveryFee } = useCart();
+  const { productItems, clearCart, syncDeliveryFee } = useCart();
   const { language, t, fs, lh } = useLanguage();
   const liquid = isLiquidUiEnabled();
   const fulfillmentRef = useRef<FulfillmentCheckoutHandle>(null);
   const scrollRef = useRef<ScrollView>(null);
   const notesFieldRef = useRef<View>(null);
-  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [fulfillmentMethod, setFulfillmentMethod] = useState<FulfillmentMethod>('delivery');
+  const [fulfillmentClosed, setFulfillmentClosed] = useState(false);
+  const [quotedFeeKs, setQuotedFeeKs] = useState(0);
+
+  const checkoutShopId = useMemo(() => {
+    for (const item of productItems) {
+      const id = String(item.product.shopId || '').trim();
+      if (id) return id;
+      const raw = String(item.product.id || '');
+      const idx = raw.indexOf('__');
+      if (idx > 0) return raw.slice(0, idx);
+    }
+    return '';
+  }, [productItems]);
+
+  const displayTotal = useMemo(() => {
+    const productsTotal = productItems.reduce(
+      (sum, item) => sum + item.product.list_price * item.quantity,
+      0,
+    );
+    const fee = fulfillmentMethod === 'pickup' || fulfillmentClosed ? 0 : quotedFeeKs;
+    return productsTotal + fee;
+  }, [fulfillmentClosed, fulfillmentMethod, productItems, quotedFeeKs]);
 
   const deliveryFeeLabel = useMemo(() => {
-    if (isDeliveryFeeLoading && deliveryFeeAmount <= 0) {
-      return t('cart.deliveryLoading');
+    if (fulfillmentMethod === 'pickup' || fulfillmentClosed) {
+      return t('cart.deliveryFree');
     }
-    if (deliveryFeeAmount > 0) {
-      return formatPrice(deliveryFeeAmount);
+    if (quotedFeeKs > 0) {
+      return formatPrice(quotedFeeKs);
     }
     return t('cart.deliveryFree');
-  }, [deliveryFeeAmount, isDeliveryFeeLoading, t]);
+  }, [fulfillmentClosed, fulfillmentMethod, quotedFeeKs, t]);
 
   const handleAddressError = useCallback((message: string) => {
     setError(message);
   }, []);
 
-  const handleFulfillmentChange = useCallback(
-    (method: FulfillmentMethod) => {
-      setFulfillmentMethod(method);
-      if (method === 'pickup') {
-        void syncDeliveryFee({ mode: 'pickup' });
-        return;
-      }
-      if (selectedAddressId) {
-        void syncDeliveryFee({ addressId: selectedAddressId, mode: 'delivery' });
-      } else {
-        void syncDeliveryFee({ mode: 'delivery' });
-      }
-    },
-    [selectedAddressId, syncDeliveryFee],
-  );
+  const handleFulfillmentChange = useCallback((method: FulfillmentMethod) => {
+    setFulfillmentMethod(method);
+  }, []);
 
-  const handleAddressSelectionChange = useCallback(
-    (addressId: string | null) => {
-      setSelectedAddressId(addressId);
-      if (fulfillmentMethod !== 'delivery') {
-        return;
-      }
-      if (addressId) {
-        void syncDeliveryFee({ addressId, mode: 'delivery' });
-      } else {
-        void syncDeliveryFee({ mode: 'delivery' });
-      }
-    },
-    [fulfillmentMethod, syncDeliveryFee],
-  );
+  const handleAddressSelectionChange = useCallback((_addressId: string | null) => {
+    // Township / fee refresh is handled inside FulfillmentCheckoutSection.
+  }, []);
+
+  const handleAvailabilityChange = useCallback((availability: FulfillmentAvailability) => {
+    setFulfillmentClosed(availability.closed);
+    setQuotedFeeKs(availability.feeKs);
+  }, []);
 
   useEffect(() => {
-    void syncDeliveryFee({ mode: 'delivery' });
+    void syncDeliveryFee({ mode: 'pickup' });
   }, [syncDeliveryFee]);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cod');
@@ -187,6 +191,11 @@ export default function CheckoutScreen() {
       return;
     }
     */
+
+    if (fulfillmentClosed) {
+      setError(t('fulfillment.closedCheckout'));
+      return;
+    }
 
     setError('');
     setIsSubmitting(true);
@@ -307,18 +316,20 @@ export default function CheckoutScreen() {
               {t('common.total')}
             </Text>
             <Text style={[styles.total, { color: colors.primary, fontSize: fs(22), lineHeight: lh(22) }]}>
-              {formatPrice(totalAmount)}
+              {formatPrice(displayTotal)}
             </Text>
           </View>
         </View>
 
-        {token ? (
+        {token && checkoutShopId ? (
           <FulfillmentCheckoutSection
             ref={fulfillmentRef}
             token={token}
+            shopId={checkoutShopId}
             onError={handleAddressError}
             onFulfillmentChange={handleFulfillmentChange}
             onAddressSelectionChange={handleAddressSelectionChange}
+            onAvailabilityChange={handleAvailabilityChange}
           />
         ) : null}
 
@@ -423,7 +434,7 @@ export default function CheckoutScreen() {
           mode="contained"
           onPress={handleCheckout}
           loading={isSubmitting}
-          disabled={isSubmitting}
+          disabled={isSubmitting || fulfillmentClosed || !checkoutShopId}
           contentStyle={styles.submitButton}>
           {t('checkout.placeOrder')}
         </Button>

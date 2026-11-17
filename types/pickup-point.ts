@@ -6,4 +6,4 @@ export type PickupPoint = {
   sequence?: number;
 };
 
-export type FulfillmentMethod = 'pickup' | 'delivery';
+export type FulfillmentMethod = 'pickup' | 'delivery' | 'express';
