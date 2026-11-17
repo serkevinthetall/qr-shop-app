@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
@@ -7,6 +6,7 @@ import { clearPreferredApiBase } from '@/constants/api';
 import { trackLoginSuccess } from '@/services/analytics';
 import { loginWithApi, logoutFromApi, registerBuyerWithApi } from '@/services/auth-api';
 import { clearSessionBootstrap } from '@/services/catalog-bootstrap';
+import { kvDelete, kvGet, kvSet } from '@/services/secure-kv';
 import { registerSessionExpiredHandler } from '@/services/session-expired';
 
 const SESSION_KEY = 'qr-app-session';
@@ -65,8 +65,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const persistSession = useCallback(async (session: Session | null) => {
     if (session) {
       const raw = JSON.stringify(session);
-      await SecureStore.setItemAsync(SESSION_KEY, raw);
-      await SecureStore.setItemAsync(TOKEN_KEY, session.token);
+      await kvSet(SESSION_KEY, raw);
+      await kvSet(TOKEN_KEY, session.token);
       // Remove plaintext JWT copies left by older builds.
       await scrubLegacyAsyncSession();
       setToken(session.token);
@@ -76,8 +76,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Session/cart only — never clear saved-login (Save password survives Sign Out).
     await Promise.all([
-      SecureStore.deleteItemAsync(SESSION_KEY).catch(() => undefined),
-      SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => undefined),
+      kvDelete(SESSION_KEY),
+      kvDelete(TOKEN_KEY),
       AsyncStorage.multiRemove([SESSION_KEY, TOKEN_KEY, CART_KEY]).catch(() => undefined),
     ]);
     setToken(null);
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let session: Session | null = null;
 
         try {
-          const secureRaw = await SecureStore.getItemAsync(SESSION_KEY);
+          const secureRaw = await kvGet(SESSION_KEY);
           if (secureRaw) {
             session = JSON.parse(secureRaw) as Session;
           }

@@ -260,14 +260,19 @@ export default function LoginScreen() {
   }
 
   const finishSession = async (sessionToken: string, saveLogin: string, savePass: string) => {
-    if (savePasswordRef.current) {
-      try {
-        await saveLoginCredentials(saveLogin, savePass);
-      } catch {
-        await saveLoginCredentials(saveLogin, savePass);
+    // Never fail login because "Save password" storage failed (common on web).
+    try {
+      if (savePasswordRef.current) {
+        try {
+          await saveLoginCredentials(saveLogin, savePass);
+        } catch {
+          await saveLoginCredentials(saveLogin, savePass).catch(() => undefined);
+        }
+      } else {
+        await clearSavedLoginCredentials().catch(() => undefined);
       }
-    } else {
-      await clearSavedLoginCredentials();
+    } catch {
+      // Ignore credential-store errors after a successful API login.
     }
     await prefetchSessionBootstrap(sessionToken).catch(() => {
       // Tabs will retry if splash prefetch fails.

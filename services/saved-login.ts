@@ -1,11 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
+
+import { kvDelete, kvGet, kvSet } from '@/services/secure-kv';
 
 /**
  * Saved login credentials for "Save password".
  *
- * SecureStore is the source of truth for the password (encrypted keychain/keystore).
- * AsyncStorage may keep a login hint only — never the password.
+ * Native: SecureStore (via kv). Web: AsyncStorage (SecureStore unavailable).
  * Sign Out does not clear these — only unchecking Save password does.
  */
 const BUNDLE_KEY = 'qr-app-saved-login-bundle';
@@ -56,7 +56,7 @@ function parseBundle(raw: string | null | undefined): SavedLoginCredentials | nu
 
 async function readFromSecureStore(): Promise<SavedLoginCredentials | null> {
   try {
-    const raw = await SecureStore.getItemAsync(BUNDLE_KEY);
+    const raw = await kvGet(BUNDLE_KEY);
     return parseBundle(raw);
   } catch {
     return null;
@@ -73,15 +73,11 @@ async function readLegacyAsyncStorageBundle(): Promise<SavedLoginCredentials | n
 }
 
 async function writeSecureStore(raw: string): Promise<void> {
-  await SecureStore.setItemAsync(BUNDLE_KEY, raw);
+  await kvSet(BUNDLE_KEY, raw);
 }
 
 async function deleteSecureStore(): Promise<void> {
-  try {
-    await SecureStore.deleteItemAsync(BUNDLE_KEY);
-  } catch {
-    // Ignore.
-  }
+  await kvDelete(BUNDLE_KEY);
 }
 
 async function scrubLegacyAsyncPassword(): Promise<void> {
