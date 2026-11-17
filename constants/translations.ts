@@ -107,6 +107,9 @@ const en: TranslationTree = {
     requiredFields: 'Please enter your phone number or email and password.',
     invalidEmail: 'Please enter a valid email address.',
     invalidCredentials: 'Email or password is incorrect.',
+    wrongRole: 'This account is not an App customer. Use Register, or sign in with a buyer account.',
+    oneTimeAccount:
+      'This is a one-time account. Ask Admin to set a password, or Register on the App.',
     loginWarning:
       'Email or password is incorrect. {remaining} more attempt(s) left. Then the account will be temporarily closed for {minutes} minutes.',
     tooManyAttempts: 'Please wait {seconds}s, then try again.',
@@ -581,6 +584,9 @@ const my: TranslationTree = {
     requiredFields: 'ကျေးဇူးပြု၍ ဖုန်းနံပါတ် (သို့) အီးမေးလ်နှင့် စကားဝှက် ထည့်ပါ။',
     invalidEmail: 'ကျေးဇူးပြု၍ အီးမေးလ် လိပ်စာမှန်ကန်စွာ ထည့်ပါ။',
     invalidCredentials: 'အီးမေးလ် သို့မဟုတ် စကားဝှက် မမှန်ကန်ပါ။',
+    wrongRole: 'ဤအကောင့်သည် App ဝယ်ယူသူ မဟုတ်ပါ။ Register လုပ်ပါ၊ သို့မဟုတ် buyer အကောင့်ဖြင့် ဝင်ပါ။',
+    oneTimeAccount:
+      'ဤအကောင့်သည် one-time အကောင့်ဖြစ်သည်။ Admin ထံ စကားဝှက် သတ်မှတ်ခိုင်းပါ၊ သို့မဟုတ် App တွင် Register လုပ်ပါ။',
     loginWarning:
       'နောက်ထပ် {remaining} ကြိမ်သာ ကျန်ပါသည်။ ထို့နောက် အကောင့်ကို {minutes} မိနစ် ခဏ ပိတ်ထားပါမည်။',
     tooManyAttempts: 'ကျေးဇူးပြု၍ {seconds} စက္ကန့် စောင့်ပြီးမှ ထပ်မံကြိုးစားပါ။',

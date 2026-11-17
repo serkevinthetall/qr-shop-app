@@ -320,6 +320,16 @@ export default function LoginScreen() {
               minutes: err.nextLockMinutes,
             }),
           );
+        } else if (
+          err.code === 'wrong_role' ||
+          /not a buyer|not buyer|is merchant|is admin/i.test(err.message)
+        ) {
+          setError(t('login.wrongRole'));
+        } else if (
+          err.code === 'one_time_account' ||
+          /one-time account/i.test(err.message)
+        ) {
+          setError(t('login.oneTimeAccount'));
         } else {
           setError(t('login.invalidCredentials'));
         }

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Appearance, type ColorSchemeName } from 'react-native';
+import { Appearance, Platform, type ColorSchemeName } from 'react-native';
 
 import { getAppColors } from '@/constants/app-colors';
 
@@ -74,6 +74,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const theme = resolveTheme(preference, systemScheme);
   const followSystem = preference === 'system';
+
+  /** Keep `<html class="dark">` in sync for NativeWind darkMode: 'class' on web. */
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    document.documentElement.style.colorScheme = theme;
+  }, [theme]);
 
   const value = useMemo(
     () => ({
