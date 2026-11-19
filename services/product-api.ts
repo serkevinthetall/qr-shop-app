@@ -16,7 +16,7 @@ import {
 
 /**
  * QR App product API — dedicated Platform routes under /api/app/catalog.
- * Retail-only (no wholesale). Not the shared Marketplace /api/catalog.
+ * Retail by default; wholesale unit price when merchant allowed this user.
  */
 
 type MallRow = Record<string, unknown>;
@@ -48,9 +48,14 @@ function mapAppProduct(row: MallRow): Product {
     shopName: shopName || undefined,
     name,
     list_price: priceKs,
-    /** App catalog never returns wholesale — keep fields empty for type compat. */
-    priceB2bKs: null,
-    wholesaleMinQty: null,
+    priceB2bKs:
+      row.priceB2bKs != null && Number(row.priceB2bKs) > 0
+        ? Number(row.priceB2bKs)
+        : null,
+    wholesaleMinQty:
+      row.wholesaleMinQty != null && Number(row.wholesaleMinQty) > 1
+        ? Number(row.wholesaleMinQty)
+        : null,
     stock,
     canOrder: row.canOrder !== false,
     description_sale: false,
