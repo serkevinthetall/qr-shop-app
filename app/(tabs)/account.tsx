@@ -406,6 +406,30 @@ export default function AccountScreen() {
           glassStyle="regular"
           interactive>
           <InfoRow label={t('account.myName')} value={user?.name ?? '-'} colors={colors} rs={rs} fs={fs} lh={lh} />
+          <InfoRow
+            label={t('account.phone')}
+            value={
+              user?.phone ||
+              (user?.login && !String(user.login).includes('@') ? user.login : '-') ||
+              '-'
+            }
+            colors={colors}
+            rs={rs}
+            fs={fs}
+            lh={lh}
+          />
+          <InfoRow
+            label={t('account.email')}
+            value={
+              user?.email ||
+              (user?.login && String(user.login).includes('@') ? user.login : '-') ||
+              '-'
+            }
+            colors={colors}
+            rs={rs}
+            fs={fs}
+            lh={lh}
+          />
 
           {SHOW_MEMBERSHIP_FEATURES && showUpgradePending ? (
             <View style={styles.infoRow}>

@@ -41,7 +41,7 @@ import { getUserFacingError } from '@/services/auth-error';
 import { checkoutOrder } from '@/services/order-api';
 import { openStoreReviewPage, shouldAutoPromptStoreRating } from '@/services/store-review';
 import { formatAddressLine } from '@/types/address';
-import { formatPrice } from '@/types/product';
+import { formatPrice, unitPriceForQty } from '@/types/product';
 import { hapticSuccess } from '@/utils/haptics';
 import { isLiquidUiEnabled } from '@/utils/liquid-ui';
 
@@ -78,7 +78,7 @@ export default function CheckoutScreen() {
 
   const displayTotal = useMemo(() => {
     const productsTotal = productItems.reduce(
-      (sum, item) => sum + item.product.list_price * item.quantity,
+      (sum, item) => sum + unitPriceForQty(item.product, item.quantity) * item.quantity,
       0,
     );
     const fee = fulfillmentMethod === 'pickup' || fulfillmentClosed ? 0 : quotedFeeKs;
@@ -275,7 +275,8 @@ export default function CheckoutScreen() {
           <Text style={[styles.cardTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16) }]}>{t('checkout.orderSummary')}</Text>
 
           {productItems.map((item) => {
-            const lineTotal = item.product.list_price * item.quantity;
+            const unit = unitPriceForQty(item.product, item.quantity);
+            const lineTotal = unit * item.quantity;
 
             return (
               <View
@@ -293,7 +294,7 @@ export default function CheckoutScreen() {
                   </Text>
                 </View>
                 <Text style={[styles.summaryLineMeta, { color: colors.textMuted, fontSize: fs(13), lineHeight: lh(13) }]}>
-                  {t('orderDetail.qty')}: {item.quantity} × {formatPrice(item.product.list_price)}
+                  {t('orderDetail.qty')}: {item.quantity} × {formatPrice(unit)}
                 </Text>
               </View>
             );

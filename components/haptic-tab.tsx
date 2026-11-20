@@ -27,7 +27,9 @@ type Spark = {
  * mismatches after Fast Refresh (13 vs 7).
  */
 export function HapticTab(props: BottomTabBarButtonProps) {
-  const { children, style, onPress, onPressIn, onPressOut, ...rest } = props;
+  // Drop href — on web it becomes a real <a> and full-reloads the tab route,
+  // which remounts auth as logged-out and bounces to /login.
+  const { children, style, onPress, onPressIn, onPressOut, href: _href, ...rest } = props;
   const revealTabBar = useRevealLiquidTabBar();
   const scale = useRef(new Animated.Value(1)).current;
   const popAnim = useRef<Animated.CompositeAnimation | null>(null);

@@ -158,6 +158,11 @@ const en: TranslationTree = {
     switchToEn: 'Switch to English',
     switchToMy: 'Switch to Myanmar',
     backToTop: 'Back to top',
+    retail: 'Retail',
+    wholesale: 'Wholesale',
+    wholesaleAndAbove: 'Wholesale · {n} and above',
+    wholesaleBuyMore: 'Please buy {n} and above for the wholesale price.',
+    wholesaleApplied: 'Wholesale price applied ({n} and above).',
   },
   orderDetail: {
     title: 'Order Detail',
@@ -248,6 +253,8 @@ const en: TranslationTree = {
   account: {
     title: 'Account',
     myName: 'My Name',
+    phone: 'Phone',
+    email: 'Email',
     memberStatus: 'Member Status',
     memberStatusRegistered: 'Registered Member',
     memberStatusPro: 'Pro',
@@ -635,6 +642,11 @@ const my: TranslationTree = {
     switchToEn: 'အင်္ဂလိပ်သို့ ပြောင်းရန်',
     switchToMy: 'မြန်မာသို့ ပြောင်းရန်',
     backToTop: 'အပေါ်သို့ ပြန်သွားရန်',
+    retail: 'လက်လီ',
+    wholesale: 'လက်ကား',
+    wholesaleAndAbove: 'လက်ကား {n} ခုနှင့်အထက်',
+    wholesaleBuyMore: 'လက်ကားစျေးရရန် {n} ခုနှင့်အထက် ဝယ်ပါ။',
+    wholesaleApplied: 'လက်ကားစျေး သက်ရောက်နေသည် ({n} ခုနှင့်အထက်)။',
   },
   orderDetail: {
     title: 'အော်ဒါ အသေးစိတ်',
@@ -725,6 +737,8 @@ const my: TranslationTree = {
   account: {
     title: 'အကောင့်',
     myName: 'ကျွန်ုပ်အမည်',
+    phone: 'ဖုန်း',
+    email: 'အီးမေးလ်',
     memberStatus: 'အဖွဲ့ဝင် အခြေအနေ',
     memberStatusRegistered: 'မှတ်ပုံတင်အဖွဲ့ဝင်',
     memberStatusPro: 'Pro',

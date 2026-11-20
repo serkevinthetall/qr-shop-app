@@ -24,7 +24,13 @@ import { getUserFacingError } from '@/services/auth-error';
 import { fetchProductById } from '@/services/product-api';
 import { getProductPreview, rememberProductPreview } from '@/services/product-preview-cache';
 import type { Product } from '@/types/product';
-import { formatPrice, getProductImageUri } from '@/types/product';
+import {
+  formatPrice,
+  getProductImageUri,
+  priceChannelLabel,
+  unitPriceForQty,
+  wholesaleQtyHint,
+} from '@/types/product';
 import { hapticSuccess } from '@/utils/haptics';
 import { isLiquidUiEnabled, liquidDetailHeaderTint, liquidGlassFill } from '@/utils/liquid-ui';
 import { getProductDescription, getProductDescriptionSections } from '@/utils/product-text';
@@ -244,6 +250,9 @@ export default function ProductDetailScreen() {
   const description = getProductDescription(product);
   const { longDescription, internalNotes } = getProductDescriptionSections(product);
   const liquid = isLiquidUiEnabled();
+  const unitPrice = unitPriceForQty(product, quantity);
+  const channelLabel = priceChannelLabel(product, t, quantity);
+  const qtyHint = wholesaleQtyHint(product, quantity, t);
   return (
     <SafeAreaView
       style={[styles.screen, { backgroundColor: colors.background }]}
@@ -298,9 +307,32 @@ export default function ProductDetailScreen() {
           <Text style={[styles.title, { color: colors.text, fontSize: fs(22), lineHeight: lh(22) }]}>
             {product.name}
           </Text>
-          <Text style={[styles.price, { color: colors.primary, fontSize: fs(22) }]}>
-            {formatPrice(product.list_price)}
+          <Text
+            style={{
+              color: colors.textMuted,
+              fontSize: fs(11),
+              fontWeight: '600',
+              letterSpacing: 0.3,
+              marginBottom: 2,
+            }}
+            numberOfLines={1}>
+            {channelLabel}
           </Text>
+          <Text style={[styles.price, { color: colors.primary, fontSize: fs(22) }]}>
+            {formatPrice(unitPrice)}
+          </Text>
+          {qtyHint ? (
+            <Text
+              style={{
+                color: colors.textMuted,
+                fontSize: fs(12),
+                fontWeight: '500',
+                marginTop: 4,
+              }}
+              numberOfLines={2}>
+              {qtyHint}
+            </Text>
+          ) : null}
 
           <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16) }]}>
             {labels.description}

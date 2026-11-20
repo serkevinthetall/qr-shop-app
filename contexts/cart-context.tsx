@@ -6,6 +6,7 @@ import {
   isDeliveryCartProduct,
 } from '@/services/delivery-fee-api';
 import type { Product } from '@/types/product';
+import { unitPriceForQty } from '@/types/product';
 
 const CART_KEY = 'qr-app-cart';
 
@@ -193,7 +194,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
         const updated = priceById.get(item.product.id);
 
-        if (!updated || updated.list_price === item.product.list_price) {
+        if (
+          !updated ||
+          (updated.list_price === item.product.list_price &&
+            updated.priceB2cKs === item.product.priceB2cKs &&
+            updated.priceB2bKs === item.product.priceB2bKs &&
+            updated.wholesaleMinQty === item.product.wholesaleMinQty)
+        ) {
           return item;
         }
 
@@ -203,6 +210,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           product: {
             ...item.product,
             list_price: updated.list_price,
+            priceB2cKs: updated.priceB2cKs,
+            priceB2bKs: updated.priceB2bKs,
+            wholesaleMinQty: updated.wholesaleMinQty,
           },
         };
       });
@@ -231,7 +241,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [items]);
 
   const totalAmount = useMemo(
-    () => items.reduce((sum, item) => sum + item.product.list_price * item.quantity, 0),
+    () =>
+      items.reduce((sum, item) => {
+        if (isDeliveryCartProduct(item.product)) {
+          return sum + item.product.list_price * item.quantity;
+        }
+        return sum + unitPriceForQty(item.product, item.quantity) * item.quantity;
+      }, 0),
     [items],
   );
 

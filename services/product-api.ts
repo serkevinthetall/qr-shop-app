@@ -41,21 +41,34 @@ function mapAppProduct(row: MallRow): Product {
       ? Number(row.compareAtKs)
       : null;
 
+  const priceB2cKs =
+    row.priceB2cKs != null && Number(row.priceB2cKs) > 0
+      ? Number(row.priceB2cKs)
+      : null;
+  const priceB2bKs =
+    row.priceB2bKs != null && Number(row.priceB2bKs) > 0
+      ? Number(row.priceB2bKs)
+      : null;
+  const wholesaleMinQty =
+    row.wholesaleMinQty != null && Number(row.wholesaleMinQty) > 1
+      ? Number(row.wholesaleMinQty)
+      : null;
+  /** Prefer retail as list baseline when wholesale is qty-gated. */
+  const listPrice =
+    priceB2bKs != null && wholesaleMinQty != null && priceB2cKs != null
+      ? priceB2cKs
+      : priceKs;
+
   return {
     id,
     productId: productId || undefined,
     shopId: shopId || undefined,
     shopName: shopName || undefined,
     name,
-    list_price: priceKs,
-    priceB2bKs:
-      row.priceB2bKs != null && Number(row.priceB2bKs) > 0
-        ? Number(row.priceB2bKs)
-        : null,
-    wholesaleMinQty:
-      row.wholesaleMinQty != null && Number(row.wholesaleMinQty) > 1
-        ? Number(row.wholesaleMinQty)
-        : null,
+    list_price: listPrice,
+    priceB2cKs,
+    priceB2bKs,
+    wholesaleMinQty,
     stock,
     canOrder: row.canOrder !== false,
     description_sale: false,

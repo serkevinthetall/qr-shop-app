@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HapticTab } from '@/components/haptic-tab';
+import { LoadingScreen } from '@/components/loading-screen';
 import { WebsiteHeader } from '@/components/web/website-header';
 import { useAuth } from '@/contexts/auth-context';
 import { useCart } from '@/contexts/cart-context';
@@ -204,7 +205,7 @@ function TabLayoutInner() {
   const colors = useAppColors();
   const { isDark } = useThemeMode();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const { t, language } = useLanguage();
   const { showBottomNav, isWebsiteLayout } = useResponsive();
   const isAndroid = Platform.OS === 'android';
@@ -212,6 +213,12 @@ function TabLayoutInner() {
   // Floating pill only on liquid iOS. Android + older iOS = flat full-width bar.
   // Website layout never uses the floating pill (bottom bar is hidden).
   const floating = showBottomNav && !isAndroid && isLiquidTabBarEnabled();
+
+  // Wait for session restore — otherwise a web tab hard-nav hits !user and
+  // Redirects to login before kv/AsyncStorage finishes.
+  if (isAuthLoading) {
+    return <LoadingScreen />;
+  }
 
   if (!user) {
     return <Redirect href="/login" />;

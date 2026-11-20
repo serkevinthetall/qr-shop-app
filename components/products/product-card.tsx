@@ -22,7 +22,13 @@ import { useLanguage } from '@/contexts/language-context';
 import { useAppColors, useThemeMode } from '@/contexts/theme-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import type { Product } from '@/types/product';
-import { formatPrice, getProductImageUri } from '@/types/product';
+import {
+  formatPrice,
+  getProductImageUri,
+  priceChannelLabel,
+  unitPriceForQty,
+  wholesaleQtyHint,
+} from '@/types/product';
 import { inputCaretProps } from '@/constants/text-input';
 import { hapticLight, hapticSuccess } from '@/utils/haptics';
 import {
@@ -46,7 +52,8 @@ export function getProductCardMinHeight(
   const imageHeight = cardWidth;
   const nameHeight = getNameBlockHeight(language, nameFontSize);
   const contentPadding = 16;
-  const bottomRow = Math.max(rs(34), 34);
+  /** Room for channel label + optional wholesale qty hint. */
+  const bottomRow = Math.max(rs(34), 34) + 28;
 
   return Math.ceil(imageHeight + contentPadding + nameHeight + bottomRow);
 }
@@ -238,12 +245,17 @@ export function ProductCard({ product, onCartFeedback, onPressCard, width }: Pro
   const colors = useAppColors();
   const { isDark } = useThemeMode();
   const { rs } = useResponsive();
-  const { fs, language } = useLanguage();
+  const { fs, language, t } = useLanguage();
   const imageUri = getProductImageUri(product);
   const nameFontSize = fs(rs(14));
   const cardMinHeight =
     width != null ? getProductCardMinHeight(width, rs, language, nameFontSize) : undefined;
   const liquid = isLiquidUiEnabled();
+  const cartQty = useProductCartQty(product.id);
+  const priceQty = Math.max(1, cartQty);
+  const unitPrice = unitPriceForQty(product, priceQty);
+  const channelLabel = priceChannelLabel(product, t, priceQty);
+  const qtyHint = wholesaleQtyHint(product, priceQty, t);
 
   return (
     <LiquidSurface
@@ -285,9 +297,23 @@ export function ProductCard({ product, onCartFeedback, onPressCard, width }: Pro
       </Pressable>
 
       <View style={styles.bottomRow}>
-        <Text style={[styles.price, { color: colors.text, fontSize: rs(15) }]} numberOfLines={1}>
-          {formatPrice(product.list_price)}
-        </Text>
+        <View style={styles.priceCol}>
+          <Text
+            style={[styles.priceChannel, { color: colors.textMuted, fontSize: fs(rs(9)) }]}
+            numberOfLines={1}>
+            {channelLabel}
+          </Text>
+          <Text style={[styles.price, { color: colors.text, fontSize: rs(15) }]} numberOfLines={1}>
+            {formatPrice(unitPrice)}
+          </Text>
+          {qtyHint ? (
+            <Text
+              style={[styles.priceHint, { color: colors.textMuted, fontSize: fs(rs(8)) }]}
+              numberOfLines={2}>
+              {qtyHint}
+            </Text>
+          ) : null}
+        </View>
         <CardQtyControl product={product} onCartFeedback={onCartFeedback} />
       </View>
     </LiquidSurface>
@@ -304,9 +330,14 @@ export function ProductListItem({ product, onCartFeedback, onPressCard }: Produc
   const colors = useAppColors();
   const { isDark } = useThemeMode();
   const { rs } = useResponsive();
-  const { fs } = useLanguage();
+  const { fs, t } = useLanguage();
   const imageUri = getProductImageUri(product);
   const liquid = isLiquidUiEnabled();
+  const cartQty = useProductCartQty(product.id);
+  const priceQty = Math.max(1, cartQty);
+  const unitPrice = unitPriceForQty(product, priceQty);
+  const channelLabel = priceChannelLabel(product, t, priceQty);
+  const qtyHint = wholesaleQtyHint(product, priceQty, t);
 
   return (
     <LiquidSurface
@@ -344,9 +375,21 @@ export function ProductListItem({ product, onCartFeedback, onPressCard }: Produc
             ellipsizeMode="tail">
             {product.name}
           </Text>
-          <Text style={[styles.price, { color: colors.text, fontSize: rs(15) }]} numberOfLines={1}>
-            {formatPrice(product.list_price)}
+          <Text
+            style={[styles.priceChannel, { color: colors.textMuted, fontSize: fs(rs(9)) }]}
+            numberOfLines={1}>
+            {channelLabel}
           </Text>
+          <Text style={[styles.price, { color: colors.text, fontSize: rs(15) }]} numberOfLines={1}>
+            {formatPrice(unitPrice)}
+          </Text>
+          {qtyHint ? (
+            <Text
+              style={[styles.priceHint, { color: colors.textMuted, fontSize: fs(rs(8)) }]}
+              numberOfLines={2}>
+              {qtyHint}
+            </Text>
+          ) : null}
         </View>
       </Pressable>
 
@@ -372,9 +415,12 @@ export function CartLineItem({
 }: CartLineItemProps) {
   const colors = useAppColors();
   const { rs } = useResponsive();
-  const { fs, lh } = useLanguage();
+  const { fs, lh, t } = useLanguage();
   const imageUri = getProductImageUri(product);
   const opacity = useRef(new Animated.Value(1)).current;
+  const unitPrice = unitPriceForQty(product, quantity);
+  const channelLabel = priceChannelLabel(product, t, quantity);
+  const qtyHint = wholesaleQtyHint(product, quantity, t);
 
   const animateAndRemove = () => {
     Animated.timing(opacity, {
@@ -420,9 +466,22 @@ export function CartLineItem({
           />
         </View>
 
+        <Text
+          style={[styles.priceChannel, { color: colors.textMuted, fontSize: fs(rs(9)) }]}
+          numberOfLines={1}>
+          {channelLabel}
+        </Text>
+        {qtyHint ? (
+          <Text
+            style={[styles.priceHint, { color: colors.textMuted, fontSize: fs(rs(9)), marginBottom: 4 }]}
+            numberOfLines={2}>
+            {qtyHint}
+          </Text>
+        ) : null}
+
         <View style={styles.cartBottomRow}>
           <Text style={[styles.cartPrice, { color: colors.primary, fontSize: rs(16) }]}>
-            {formatPrice(product.list_price * quantity)}
+            {formatPrice(unitPrice * quantity)}
           </Text>
 
           <QuantityStepper
@@ -481,6 +540,21 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 10,
   },
+  priceCol: {
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  priceChannel: {
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    marginBottom: 1,
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
+  },
+  priceHint: {
+    fontWeight: '500',
+    marginTop: 2,
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
+  },
   price: {
     flexShrink: 1,
     fontWeight: '700',
@@ -504,6 +578,8 @@ const styles = StyleSheet.create({
   qtyPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexGrow: 0,
+    flexShrink: 0,
     borderRadius: 999,
     paddingHorizontal: 3,
     paddingVertical: 3,
@@ -512,13 +588,19 @@ const styles = StyleSheet.create({
   pillSideBtn: {
     alignItems: 'center',
     justifyContent: 'center',
+    flexGrow: 0,
+    flexShrink: 0,
   },
   qtyInput: {
-    minWidth: 28,
-    paddingHorizontal: 4,
+    // Fixed width — RN Web TextInput expands to fill the row without this.
+    width: 36,
+    flexGrow: 0,
+    flexShrink: 0,
+    paddingHorizontal: 2,
     paddingVertical: 0,
     textAlign: 'center',
     fontWeight: '700',
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' as const } : null),
     ...(Platform.OS === 'android'
       ? { includeFontPadding: false, textAlignVertical: 'center' as const }
       : { includeFontPadding: false }),

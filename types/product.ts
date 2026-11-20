@@ -20,6 +20,8 @@ export type Product = {
   shopName?: string;
   name: string;
   list_price: number;
+  /** Retail unit when API also exposes wholesale for this viewer. */
+  priceB2cKs?: number | null;
   priceB2bKs?: number | null;
   wholesaleMinQty?: number | null;
   stock?: number;
@@ -73,6 +75,86 @@ export function getCategoryId(categId: CategoryRef) {
 
 export function formatPrice(price: number) {
   return `${price.toLocaleString()} Ks`;
+}
+
+type PricedProduct = Pick<
+  Product,
+  'list_price' | 'priceB2cKs' | 'priceB2bKs' | 'wholesaleMinQty'
+>;
+
+export function retailKs(product: PricedProduct): number | null {
+  if (product.priceB2cKs != null && product.priceB2cKs > 0) {
+    return Math.floor(product.priceB2cKs);
+  }
+  if (product.priceB2bKs == null || product.priceB2bKs <= 0) {
+    return product.list_price > 0 ? Math.floor(product.list_price) : null;
+  }
+  return null;
+}
+
+export function wholesaleKs(product: PricedProduct): number | null {
+  if (product.priceB2bKs != null && product.priceB2bKs > 0) {
+    return Math.floor(product.priceB2bKs);
+  }
+  return null;
+}
+
+/** Min qty to unlock wholesale; null when not qty-gated. */
+export function wholesaleMinQtyOf(product: PricedProduct): number | null {
+  if (wholesaleKs(product) == null) return null;
+  if (product.wholesaleMinQty != null && product.wholesaleMinQty > 1) {
+    return Math.floor(product.wholesaleMinQty);
+  }
+  return null;
+}
+
+/**
+ * Wholesale only when qty ≥ min (matches Platform resolveUnitPrice).
+ * No min + wholesale access → wholesale unit. Else retail.
+ */
+export function unitPriceForQty(product: PricedProduct, qty: number): number {
+  const q = Math.max(1, Math.floor(Number(qty) || 1));
+  const wholesale = wholesaleKs(product);
+  const min = wholesaleMinQtyOf(product);
+  const retail = retailKs(product);
+
+  if (wholesale != null && min != null && q >= min) return wholesale;
+  if (wholesale != null && min == null) return wholesale;
+  if (retail != null) return retail;
+  return wholesale ?? Math.max(0, Math.floor(product.list_price || 0));
+}
+
+/** Active channel label for the current qty. */
+export function priceChannelLabel(
+  product: PricedProduct,
+  t: (key: string, params?: Record<string, string | number>) => string,
+  qty = 1,
+): string {
+  const wholesale = wholesaleKs(product);
+  const min = wholesaleMinQtyOf(product);
+  const q = Math.max(1, Math.floor(Number(qty) || 1));
+
+  if (wholesale != null && min != null && q >= min) {
+    return t('products.wholesaleAndAbove', { n: min });
+  }
+  if (wholesale != null && min == null) {
+    return t('products.wholesale');
+  }
+  return t('products.retail');
+}
+
+/** Hint when wholesale exists but qty is below the min. */
+export function wholesaleQtyHint(
+  product: PricedProduct,
+  qty: number,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string | null {
+  const wholesale = wholesaleKs(product);
+  const min = wholesaleMinQtyOf(product);
+  if (wholesale == null || min == null) return null;
+  const q = Math.max(0, Math.floor(Number(qty) || 0));
+  if (q >= min) return t('products.wholesaleApplied', { n: min });
+  return t('products.wholesaleBuyMore', { n: min });
 }
 
 function getImageVersion(writeDate?: string | false) {
