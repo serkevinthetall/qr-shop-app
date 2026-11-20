@@ -718,14 +718,14 @@ export default function LoginScreen() {
                               numberOfLines={1}>
                               {item.name}
                             </Text>
-                            {item.postalCode ? (
+                            {item.state ? (
                               <Text
                                 style={{
                                   color: colors.textMuted,
                                   fontSize: fs(11),
                                   marginTop: 2,
                                 }}>
-                                {item.postalCode}
+                                {item.state}
                               </Text>
                             ) : null}
                           </Pressable>
