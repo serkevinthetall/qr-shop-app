@@ -1,4 +1,12 @@
-/** Push / in-app notifications left out of Platform API cutover. */
+import { Platform } from 'react-native';
+
+import { apiRequest } from '@/services/api-client';
+import { throwIfUnauthorized } from '@/services/auth-error';
+import { getApiFallbackMessage } from '@/services/network-error';
+import {
+  platformErrorMessage,
+  unwrapPlatformData,
+} from '@/services/platform-envelope';
 
 export type AppNotification = {
   id: string;
@@ -15,6 +23,11 @@ export type AppNotification = {
   create_date?: string;
 };
 
+type NotificationsPayload = {
+  notifications?: AppNotification[];
+  success?: boolean;
+};
+
 export function notificationDateToMs(value?: string | number | null) {
   if (value == null || value === '') {
     return 0;
@@ -26,33 +39,109 @@ export function notificationDateToMs(value?: string | number | null) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export async function fetchNotifications(_token: string) {
-  return [] as AppNotification[];
+export async function fetchNotifications(token: string) {
+  const { response, data } = await apiRequest<unknown>('/api/app/notifications', {
+    token,
+  });
+
+  throwIfUnauthorized(response);
+  if (!response.ok) {
+    throw new Error(
+      platformErrorMessage(data, getApiFallbackMessage('loadNotifications')),
+    );
+  }
+
+  const payload = unwrapPlatformData<NotificationsPayload | AppNotification[]>(data);
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  return payload?.notifications || [];
 }
 
 export async function registerPushToken(
-  _token: string,
-  _expoPushToken: string | null,
-  _languageOrTimeout?: string | number,
+  token: string,
+  expoPushToken: string | null,
+  languageOrTimeout?: string | number,
 ) {
-  return;
+  const expo = String(expoPushToken || '').trim();
+  if (!expo) return;
+
+  const language =
+    typeof languageOrTimeout === 'string' ? languageOrTimeout : 'my';
+
+  const { response, data } = await apiRequest<unknown>(
+    '/api/app/notifications/register-token',
+    {
+      method: 'POST',
+      token,
+      body: {
+        expo_push_token: expo,
+        language,
+        platform: Platform.OS,
+      },
+    },
+  );
+
+  throwIfUnauthorized(response);
+  if (!response.ok) {
+    throw new Error(platformErrorMessage(data, getApiFallbackMessage('generic')));
+  }
 }
 
 export async function unregisterPushToken(
-  _token: string,
-  _expoPushToken: string | null,
+  token: string,
+  expoPushToken: string | null,
   _languageOrTimeout?: string | number,
 ) {
-  return;
+  const { response, data } = await apiRequest<unknown>(
+    '/api/app/notifications/register-token',
+    {
+      method: 'DELETE',
+      token,
+      body: expoPushToken ? { expo_push_token: expoPushToken } : {},
+    },
+  );
+
+  throwIfUnauthorized(response);
+  if (!response.ok) {
+    throw new Error(platformErrorMessage(data, getApiFallbackMessage('generic')));
+  }
 }
 
-export async function sendTestPush(_token: string) {
-  return { ok: false as const };
+export async function sendTestPush(token: string) {
+  const { response, data } = await apiRequest<unknown>(
+    '/api/app/notifications/test-push',
+    {
+      method: 'POST',
+      token,
+    },
+  );
+
+  throwIfUnauthorized(response);
+  if (!response.ok) {
+    throw new Error(platformErrorMessage(data, getApiFallbackMessage('generic')));
+  }
+  return { ok: true as const };
 }
 
-export async function fetchPushStatus(_token: string) {
+export async function fetchPushStatus(token: string) {
+  const { response, data } = await apiRequest<unknown>(
+    '/api/app/notifications/push-status',
+    { token },
+  );
+
+  throwIfUnauthorized(response);
+  if (!response.ok) {
+    throw new Error(platformErrorMessage(data, getApiFallbackMessage('generic')));
+  }
+
+  const payload = unwrapPlatformData<{
+    registered?: boolean;
+    partner_id?: number;
+  }>(data);
+
   return {
-    registered: false,
-    partner_id: 0,
+    registered: Boolean(payload?.registered),
+    partner_id: Number(payload?.partner_id) || 0,
   };
 }
