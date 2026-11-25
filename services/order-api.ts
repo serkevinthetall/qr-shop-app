@@ -104,6 +104,8 @@ export type CheckoutPayload = {
   pickupPointId?: string;
   couponCode?: string;
   items: CheckoutItem[];
+  /** Absolute or /uploads/… wallet slip after Platform upload. */
+  paymentSlipUrl?: string | null;
   paymentScreenshot?: {
     uri: string;
     name: string;
@@ -402,14 +404,30 @@ export async function checkoutOrder(token: string, payload: CheckoutPayload) {
       : payload.fulfillmentMethod === 'express'
         ? 'express'
         : 'delivery';
-  const payment =
+  let payment =
     payload.paymentMethod === 'wire_transfer' ? 'kpay' : String(payload.paymentMethod || 'cod');
+  // Match Marketplace: pickup COD → cash at counter.
+  if (fulfillment === 'pickup' && payment === 'cod') {
+    payment = 'cash';
+  }
+  const paymentSlipUrl = String(payload.paymentSlipUrl || '').trim() || undefined;
+  const buyerNote =
+    String(payload.deliveryNotes || payload.note || '')
+      .trim()
+      .slice(0, 1000) || undefined;
+  const preferredRaw = String(payload.preferredDeliveryDate || '').trim();
+  const preferredDeliveryDate = /^\d{4}-\d{2}-\d{2}$/.test(preferredRaw)
+    ? preferredRaw
+    : undefined;
 
   const packages = [...byShop.entries()].map(([shopId, items]) => ({
     shopId,
     buyerName: payload.buyerName || undefined,
     fulfillment,
     payment,
+    paymentSlipUrl,
+    buyerNote,
+    preferredDeliveryDate,
     address:
       fulfillment === 'delivery' || fulfillment === 'express'
         ? payload.addressText || undefined
