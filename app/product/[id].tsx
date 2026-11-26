@@ -18,10 +18,12 @@ import { useAuth } from '@/contexts/auth-context';
 import { ProductRibbonBadge } from '@/components/products/product-ribbon';
 import { useLanguage } from '@/contexts/language-context';
 import { useAppColors, useThemeMode } from '@/contexts/theme-context';
+import { useWishlist } from '@/contexts/wishlist-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import { onCatalogRefreshRequested } from '@/services/catalog-events';
 import { getUserFacingError } from '@/services/auth-error';
 import { fetchProductById } from '@/services/product-api';
+import { setPendingChatProduct } from '@/services/chat-pending';
 import { getProductPreview, rememberProductPreview } from '@/services/product-preview-cache';
 import type { Product } from '@/types/product';
 import {
@@ -31,7 +33,7 @@ import {
   unitPriceForQty,
   wholesaleQtyHint,
 } from '@/types/product';
-import { hapticSuccess } from '@/utils/haptics';
+import { hapticLight, hapticSuccess } from '@/utils/haptics';
 import { isLiquidUiEnabled, liquidDetailHeaderTint, liquidGlassFill } from '@/utils/liquid-ui';
 import { getProductDescription, getProductDescriptionSections } from '@/utils/product-text';
 
@@ -44,8 +46,10 @@ export default function ProductDetailScreen() {
   const { fs, lh, language, t } = useLanguage();
   const { token } = useAuth();
   const { addToCart } = useCart();
+  const { isSaved, toggle: toggleWishlist } = useWishlist();
   const { id } = useLocalSearchParams<{ id: string }>();
   const productId = String(id ?? '');
+  const saved = isSaved(productId);
 
   const labels =
     language === 'my'
@@ -205,6 +209,23 @@ export default function ProductDetailScreen() {
     setSnackbar(labels.added);
   };
 
+  const handleMessageShop = () => {
+    if (!product?.shopId) {
+      setSnackbar(t('messages.noShop'));
+      return;
+    }
+    Keyboard.dismiss();
+    hapticLight();
+    const unit = unitPriceForQty(product, quantity);
+    setPendingChatProduct(product.shopId, {
+      productId: product.productId || product.id,
+      name: product.name,
+      priceLabel: formatPrice(unit),
+      imageUrl: getProductImageUri(product) || undefined,
+    });
+    router.push(`/chat/${encodeURIComponent(product.shopId)}` as Href);
+  };
+
   const openSimilarProduct = (item: Product) => {
     rememberProductPreview(item);
     router.push(`/product/${item.id}` as Href);
@@ -285,7 +306,20 @@ export default function ProductDetailScreen() {
             numberOfLines={1}>
             {product.name}
           </Text>
-          <View style={styles.headerSpacer} />
+          <Pressable
+            onPress={() => {
+              hapticLight();
+              toggleWishlist(product);
+            }}
+            style={styles.iconButton}
+            accessibilityRole="button"
+            accessibilityLabel={saved ? t('wishlist.remove') : t('wishlist.add')}>
+            <MaterialIcons
+              name={saved ? 'favorite' : 'favorite-border'}
+              size={24}
+              color={saved ? colors.danger : liquid && !isDark ? '#111827' : colors.text}
+            />
+          </Pressable>
         </LiquidSurface>
 
         <View style={styles.body}>
@@ -439,6 +473,20 @@ export default function ProductDetailScreen() {
             labelStyle={{ fontSize: fs(15), lineHeight: lh(15), fontWeight: '700' }}>
             {labels.addToCart}
           </Button>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('messages.messageShop')}
+            onPress={handleMessageShop}
+            style={[
+              styles.messageButton,
+              {
+                borderColor: liquid ? liquidGlassFill(isDark) : colors.border,
+                backgroundColor: liquid ? liquidGlassFill(isDark) : colors.inputBg,
+              },
+            ]}>
+            <MaterialIcons name="chat-bubble-outline" size={22} color={colors.primary} />
+          </Pressable>
         </LiquidSurface>
       </KeyboardAvoidingView>
 
@@ -550,6 +598,14 @@ const styles = StyleSheet.create({
   },
   addButtonContent: {
     height: 48,
+  },
+  messageButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorText: {
     textAlign: 'center',

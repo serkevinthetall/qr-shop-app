@@ -253,6 +253,20 @@ function routeFromNotificationData(data: Record<string, unknown> | undefined) {
     return `/product/${data.productId}`;
   }
 
+  if (
+    (data.type === 'chat' || data.kind === 'message') &&
+    (data.shopId || data.threadId)
+  ) {
+    if (data.shopId) {
+      return `/chat/${encodeURIComponent(String(data.shopId))}`;
+    }
+    return '/messages';
+  }
+
+  if ((data.type === 'order' || data.kind === 'order') && data.orderId) {
+    return `/order/${encodeURIComponent(String(data.orderId))}`;
+  }
+
   if (data.type === 'coupon') {
     return '/notifications';
   }

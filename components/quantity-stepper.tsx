@@ -138,18 +138,26 @@ const styles = StyleSheet.create({
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexGrow: 0,
+    flexShrink: 0,
     borderRadius: 999,
     borderWidth: 1,
   },
   stepperButton: {
     margin: 0,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   input: {
-    minWidth: 36,
-    paddingHorizontal: 4,
+    // Fixed width — RN Web TextInput expands across the cart row without this.
+    width: 36,
+    flexGrow: 0,
+    flexShrink: 0,
+    paddingHorizontal: 2,
     paddingVertical: 0,
     textAlign: 'center',
     fontWeight: '700',
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' as const } : null),
     ...(Platform.OS === 'android'
       ? { includeFontPadding: false, textAlignVertical: 'center' as const }
       : null),

@@ -1,53 +1,30 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { clearPreferredApiBase } from '@/constants/api';
+import {
+  AuthContext,
+  type AuthContextValue,
+  type BuyerRegisterInput,
+  type User,
+} from '@/contexts/auth-store';
 import { trackLoginSuccess } from '@/services/analytics';
 import { loginWithApi, logoutFromApi, registerBuyerWithApi } from '@/services/auth-api';
 import { clearSessionBootstrap } from '@/services/catalog-bootstrap';
 import { kvDelete, kvGet, kvSet } from '@/services/secure-kv';
 import { registerSessionExpiredHandler } from '@/services/session-expired';
 
+export type { BuyerRegisterInput, User } from '@/contexts/auth-store';
+
 const SESSION_KEY = 'qr-app-session';
 const TOKEN_KEY = 'qr-app-token';
 const CART_KEY = 'qr-app-cart';
-
-export type User = {
-  id: string;
-  name: string;
-  login: string;
-  phone?: string | null;
-  email?: string | null;
-  /** Legacy — unused on Platform API. */
-  partner_id: number | null;
-};
 
 type Session = {
   token: string;
   user: User;
 };
-
-export type BuyerRegisterInput = {
-  name: string;
-  phone: string;
-  email: string;
-  street: string;
-  townshipId: string;
-  password: string;
-};
-
-type AuthContextValue = {
-  user: User | null;
-  token: string | null;
-  isLoading: boolean;
-  signIn: (login: string, password: string) => Promise<string>;
-  /** Marketplace-style one-time identity + password → Platform buyer account. */
-  signUp: (input: BuyerRegisterInput) => Promise<string>;
-  signOut: () => Promise<void>;
-};
-
-const AuthContext = createContext<AuthContextValue | null>(null);
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -231,7 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void logoutFromApi(sessionToken, 4000).catch(() => undefined);
   }, [persistSession, token]);
 
-  const value = useMemo(
+  const value = useMemo<AuthContextValue>(
     () => ({ user, token, isLoading, signIn, signUp, signOut }),
     [user, token, isLoading, signIn, signUp, signOut],
   );

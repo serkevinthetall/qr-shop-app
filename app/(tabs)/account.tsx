@@ -38,8 +38,10 @@ import {
 import { useAuth } from '@/contexts/auth-context';
 import { useLanguage } from '@/contexts/language-context';
 import { useLiquidTabBarScrollProps } from '@/contexts/liquid-tab-bar-visibility';
+import { useChat } from '@/contexts/chat-context';
 import { useNotifications } from '@/contexts/notification-context';
 import { useAppColors, useThemeMode } from '@/contexts/theme-context';
+import { useWishlist } from '@/contexts/wishlist-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import { takeAccountBootstrap } from '@/services/catalog-bootstrap';
 import { getUserFacingError } from '@/services/auth-error';
@@ -165,6 +167,8 @@ export default function AccountScreen() {
   const { user, token, signOut } = useAuth();
   const { t, fs, lh } = useLanguage();
   const { unreadCount } = useNotifications();
+  const { unreadCount: chatUnreadCount } = useChat();
+  const { count: wishlistCount } = useWishlist();
   const tabBarScrollProps = useLiquidTabBarScrollProps();
   const liquid = isLiquidUiEnabled();
   const cardBorder = liquid ? liquidGlassBorder(isDark) : colors.border;
@@ -641,6 +645,66 @@ export default function AccountScreen() {
           </Button>
         </LiquidSurface>
 
+        <LiquidSurface
+          style={[styles.card, { borderColor: cardBorder }]}
+          backgroundColor={colors.card}
+          glassStyle="regular"
+          interactive>
+          <Pressable
+            onPress={withHapticPress(() => router.push('/wishlist' as Href))}
+            style={styles.navRow}>
+            <MaterialCommunityIcons name="heart-outline" size={22} color={colors.primary} />
+            <View style={styles.navTextWrap}>
+              <View style={styles.navTitleRow}>
+                <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
+                  {t('account.wishlist')}
+                </Text>
+                {wishlistCount > 0 ? (
+                  <View style={[styles.badge, { backgroundColor: colors.danger }]}>
+                    <Text style={[styles.badgeText, { color: colors.onPrimary }]}>
+                      {wishlistCount > 9 ? '9+' : wishlistCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={[styles.themeSubtitle, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
+                {t('account.wishlistSubtitle')}
+              </Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={16} color={colors.textMuted} />
+          </Pressable>
+        </LiquidSurface>
+
+        <LiquidSurface
+          style={[styles.card, { borderColor: cardBorder }]}
+          backgroundColor={colors.card}
+          glassStyle="regular"
+          interactive>
+          <Pressable
+            onPress={withHapticPress(() => router.push('/messages' as Href))}
+            style={styles.navRow}>
+            <MaterialCommunityIcons name="message-outline" size={22} color={colors.primary} />
+            <View style={styles.navTextWrap}>
+              <View style={styles.navTitleRow}>
+                <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
+                  {t('account.messages')}
+                </Text>
+                {chatUnreadCount > 0 ? (
+                  <View style={[styles.badge, { backgroundColor: colors.danger }]}>
+                    <Text style={[styles.badgeText, { color: colors.onPrimary }]}>
+                      {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={[styles.themeSubtitle, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
+                {t('account.messagesSubtitle')}
+              </Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={16} color={colors.textMuted} />
+          </Pressable>
+        </LiquidSurface>
+
         {SHOW_NOTIFICATIONS ? (
           <LiquidSurface
             style={[styles.card, { borderColor: cardBorder }]}
@@ -650,6 +714,7 @@ export default function AccountScreen() {
             <Pressable
               onPress={withHapticPress(() => router.push('/notifications' as Href))}
               style={styles.navRow}>
+              <MaterialCommunityIcons name="bell-outline" size={22} color={colors.primary} />
               <View style={styles.navTextWrap}>
                 <View style={styles.navTitleRow}>
                   <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
@@ -680,6 +745,7 @@ export default function AccountScreen() {
           <Pressable
             onPress={withHapticPress(() => router.push('/change-password' as Href))}
             style={styles.navRow}>
+            <MaterialCommunityIcons name="lock-reset" size={22} color={colors.primary} />
             <View style={styles.navTextWrap}>
               <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
                 {t('account.resetPassword')}
@@ -831,13 +897,11 @@ export default function AccountScreen() {
               void openStoreReviewPage();
             })}
             style={styles.navRow}>
+            <MaterialCommunityIcons name="star-outline" size={22} color={colors.primary} />
             <View style={styles.navTextWrap}>
-              <View style={styles.navTitleRow}>
-                <MaterialCommunityIcons name="star-outline" size={20} color={colors.primary} />
-                <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
-                  {t('account.rateStore')}
-                </Text>
-              </View>
+              <Text style={[styles.themeTitle, { color: colors.text, fontSize: fs(rs(16)), lineHeight: lh(16) }]}>
+                {t('account.rateStore')}
+              </Text>
               <Text style={[styles.themeSubtitle, { color: colors.textMuted, fontSize: fs(rs(13)), lineHeight: lh(13) }]}>
                 {t('account.rateStoreSubtitle')}
               </Text>

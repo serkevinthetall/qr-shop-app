@@ -114,6 +114,7 @@ async function fetchAppCatalogPage(params: {
   page: number;
   q?: string;
   categoryId?: string;
+  shopId?: string;
   token?: string | null;
 }) {
   const qs = new URLSearchParams();
@@ -121,6 +122,7 @@ async function fetchAppCatalogPage(params: {
   qs.set('page', String(params.page));
   if (params.q) qs.set('q', params.q);
   if (params.categoryId) qs.set('categoryId', params.categoryId);
+  if (params.shopId) qs.set('shopId', params.shopId);
 
   const { response, data } = await apiRequest<unknown>(
     `/api/app/catalog?${qs.toString()}`,
@@ -151,6 +153,81 @@ export async function fetchProducts(
       : undefined;
 
   return fetchAppCatalogPage({ limit, page, categoryId, token });
+}
+
+export async function fetchProductsForShop(
+  shopId: string,
+  token?: string | null,
+  limit = 80,
+) {
+  const id = String(shopId || '').trim();
+  if (!id) return [];
+  return fetchAppCatalogPage({ limit, page: 1, shopId: id, token });
+}
+
+export type ShopStorefront = {
+  id: string;
+  name: string;
+  tagline: string;
+  logoUrl: string;
+  coverUrl: string;
+  phone: string;
+  location: string;
+  township: string;
+  aboutText: string;
+  websitePublished: boolean;
+};
+
+function mapShopMeta(row: MallRow, fallbackId: string): ShopStorefront {
+  const id = String(row.id || fallbackId);
+  return {
+    id,
+    name: String(row.name || ''),
+    tagline: String(row.tagline || ''),
+    logoUrl: resolvePlatformMediaUrl(getApiBaseUrl(), String(row.logoUrl || '')),
+    coverUrl: resolvePlatformMediaUrl(getApiBaseUrl(), String(row.coverUrl || '')),
+    phone: String(row.phone || row.phone2 || ''),
+    location: String(row.location || ''),
+    township: String(row.township || ''),
+    aboutText: String(row.aboutText || ''),
+    websitePublished: Boolean(row.websitePublished),
+  };
+}
+
+/**
+ * Shop page chrome from public shop meta; products from QR App catalog
+ * so retail/wholesale follows allowed-buyer rules (not Marketplace website SKUs).
+ */
+export async function fetchShopStorefront(
+  shopId: string,
+  token?: string | null,
+): Promise<{ shop: ShopStorefront; products: Product[] }> {
+  const id = String(shopId || '').trim();
+  if (!id) {
+    return {
+      shop: {
+        id: '',
+        name: '',
+        tagline: '',
+        logoUrl: '',
+        coverUrl: '',
+        phone: '',
+        location: '',
+        township: '',
+        aboutText: '',
+        websitePublished: false,
+      },
+      products: [],
+    };
+  }
+
+  const [metaRes, products] = await Promise.all([
+    apiRequest<unknown>(`/api/shops/${encodeURIComponent(id)}`),
+    fetchProductsForShop(id, token, 200),
+  ]);
+  const meta = unwrapPlatformData<MallRow>(metaRes.data);
+  const shop = mapShopMeta(meta || {}, id);
+  return { shop, products };
 }
 
 export async function fetchProductById(

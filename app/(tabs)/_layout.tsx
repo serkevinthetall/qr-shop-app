@@ -20,6 +20,7 @@ import { LoadingScreen } from '@/components/loading-screen';
 import { WebsiteHeader } from '@/components/web/website-header';
 import { useAuth } from '@/contexts/auth-context';
 import { useCart } from '@/contexts/cart-context';
+import { useChat } from '@/contexts/chat-context';
 import { useLanguage } from '@/contexts/language-context';
 import {
   LiquidTabBarVisibilityProvider,
@@ -100,6 +101,35 @@ function CartTabIcon({
         {totalItems > 0 ? (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{totalItems > 99 ? '99+' : totalItems}</Text>
+          </View>
+        ) : null}
+      </View>
+    </TabIconHalo>
+  );
+}
+
+function AccountTabIcon({
+  color,
+  size,
+  focused,
+  floating,
+  isDark,
+}: {
+  color: string;
+  size?: number;
+  focused: boolean;
+  floating: boolean;
+  isDark: boolean;
+}) {
+  const { unreadCount } = useChat();
+
+  return (
+    <TabIconHalo focused={focused} enabled={floating} isDark={isDark}>
+      <View style={styles.cartIconWrap}>
+        <MaterialIcons name="person" size={size ?? 24} color={color} />
+        {unreadCount > 0 ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
           </View>
         ) : null}
       </View>
@@ -366,13 +396,13 @@ function TabLayoutInner() {
             title: t('tabs.account'),
             tabBarLabel: labelFor('tabs.account'),
             tabBarIcon: ({ focused, size }) => (
-              <TabIconHalo focused={focused} enabled={floating} isDark={isDark}>
-                <MaterialIcons
-                  name="person"
-                  size={size ?? 24}
-                  color={focused ? activeColor : inactiveColor}
-                />
-              </TabIconHalo>
+              <AccountTabIcon
+                focused={focused}
+                size={size}
+                color={focused ? activeColor : inactiveColor}
+                floating={floating}
+                isDark={isDark}
+              />
             ),
           }}
         />

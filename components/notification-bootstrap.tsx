@@ -1,6 +1,7 @@
 import { useRouter, type Href } from 'expo-router';
 import { useEffect } from 'react';
 
+import { useChat } from '@/contexts/chat-context';
 import {
   addNotificationNavigationListeners,
   addNotificationReceivedListener,
@@ -10,6 +11,7 @@ import { requestCatalogRefresh } from '@/services/catalog-events';
 
 export function NotificationBootstrap() {
   const router = useRouter();
+  const { refresh: refreshChat } = useChat();
 
   useEffect(() => {
     prepareNotificationChannels().catch(() => {
@@ -24,13 +26,16 @@ export function NotificationBootstrap() {
       if (data?.type === 'product') {
         requestCatalogRefresh();
       }
+      if (data?.type === 'chat' || data?.kind === 'message') {
+        void refreshChat();
+      }
     });
 
     return () => {
       removeNavigation();
       removeReceived();
     };
-  }, [router]);
+  }, [router, refreshChat]);
 
   return null;
 }

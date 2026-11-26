@@ -25,6 +25,7 @@ import { getAppColors } from '@/constants/app-colors';
 import { MYANMAR_FONTS } from '@/constants/fonts';
 import { hydratePreferredApiBase } from '@/constants/api';
 import { AndroidSystemNavScrim } from '@/components/android-system-nav-scrim';
+import { NotificationBootstrap } from '@/components/notification-bootstrap';
 import { OfflineNotice } from '@/components/offline-notice';
 import { ForceUpdateModal } from '@/components/force-update-modal';
 import { ServerDownNotice } from '@/components/server-down-notice';
@@ -32,11 +33,13 @@ import { WebNavDrawer } from '@/components/web/web-nav-drawer';
 import { AppStatusProvider } from '@/contexts/app-status-context';
 import { AuthProvider } from '@/contexts/auth-context';
 import { CartProvider } from '@/contexts/cart-context';
+import { ChatProvider } from '@/contexts/chat-context';
 import { LanguageProvider, useLanguage } from '@/contexts/language-context';
 import { NetworkProvider } from '@/contexts/network-context';
 import { NotificationProvider } from '@/contexts/notification-context';
 import { ThemeProvider, useThemeMode } from '@/contexts/theme-context';
 import { WebNavProvider } from '@/contexts/web-nav-context';
+import { WishlistProvider } from '@/contexts/wishlist-context';
 import { initAppAnalytics, trackAppOpen } from '@/services/analytics';
 import { initSslPinning } from '@/services/ssl-pinning';
 
@@ -138,6 +141,10 @@ function RootNavigator() {
           <Stack.Screen name="checkout" />
           <Stack.Screen name="addresses" />
           <Stack.Screen name="notifications" />
+          <Stack.Screen name="messages" />
+          <Stack.Screen name="wishlist" />
+          <Stack.Screen name="chat/[shopId]" />
+          <Stack.Screen name="shop/[shopId]" />
           <Stack.Screen name="product/[id]" />
           <Stack.Screen name="change-password" />
           <Stack.Screen name="order/[id]" />
@@ -191,12 +198,17 @@ export default function RootLayout() {
             <AppStatusProvider>
               <AuthProvider>
                 <NotificationProvider>
-                  <CartProvider>
-                    <WebNavProvider>
-                      <RootNavigator />
-                      <WebNavDrawer />
-                    </WebNavProvider>
-                  </CartProvider>
+                  <ChatProvider>
+                    <CartProvider>
+                      <WishlistProvider>
+                        <WebNavProvider>
+                          <NotificationBootstrap />
+                          <RootNavigator />
+                          <WebNavDrawer />
+                        </WebNavProvider>
+                      </WishlistProvider>
+                    </CartProvider>
+                  </ChatProvider>
                 </NotificationProvider>
               </AuthProvider>
             </AppStatusProvider>

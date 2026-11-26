@@ -20,6 +20,7 @@ import { ProductRibbonBadge } from '@/components/products/product-ribbon';
 import { useCart } from '@/contexts/cart-context';
 import { useLanguage } from '@/contexts/language-context';
 import { useAppColors, useThemeMode } from '@/contexts/theme-context';
+import { useWishlist } from '@/contexts/wishlist-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import type { Product } from '@/types/product';
 import {
@@ -30,7 +31,7 @@ import {
   wholesaleQtyHint,
 } from '@/types/product';
 import { inputCaretProps } from '@/constants/text-input';
-import { hapticLight, hapticSuccess } from '@/utils/haptics';
+import { hapticLight, hapticSuccess, withHapticPress } from '@/utils/haptics';
 import {
   isLiquidUiEnabled,
   liquidGlassBorder,
@@ -246,6 +247,8 @@ export function ProductCard({ product, onCartFeedback, onPressCard, width }: Pro
   const { isDark } = useThemeMode();
   const { rs } = useResponsive();
   const { fs, language, t } = useLanguage();
+  const { isSaved, toggle } = useWishlist();
+  const saved = isSaved(product.id);
   const imageUri = getProductImageUri(product);
   const nameFontSize = fs(rs(14));
   const cardMinHeight =
@@ -275,26 +278,41 @@ export function ProductCard({ product, onCartFeedback, onPressCard, width }: Pro
       backgroundColor={colors.card}
       cornerRadius={16}
       glassStyle="regular">
-      <Pressable onPress={onPressCard} disabled={!onPressCard}>
-        <View style={[styles.imageWrap, { backgroundColor: colors.inputBg }]}>
-          <Image
-            source={{ uri: imageUri }}
-            style={styles.image}
-            contentFit="cover"
-            transition={200}
-          />
-          {product.ribbon ? <ProductRibbonBadge ribbon={product.ribbon} /> : null}
-        </View>
+      <View>
+        <Pressable onPress={onPressCard} disabled={!onPressCard}>
+          <View style={[styles.imageWrap, { backgroundColor: colors.inputBg }]}>
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.image}
+              contentFit="cover"
+              transition={200}
+            />
+            {product.ribbon ? <ProductRibbonBadge ribbon={product.ribbon} /> : null}
+          </View>
 
-        <View style={styles.nameWrap}>
-          <Text
-            style={[styles.name, { color: colors.text, fontSize: nameFontSize }]}
-            numberOfLines={1}
-            ellipsizeMode="tail">
-            {product.name}
-          </Text>
-        </View>
-      </Pressable>
+          <View style={styles.nameWrap}>
+            <Text
+              style={[styles.name, { color: colors.text, fontSize: nameFontSize }]}
+              numberOfLines={1}
+              ellipsizeMode="tail">
+              {product.name}
+            </Text>
+          </View>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={saved ? t('wishlist.remove') : t('wishlist.add')}
+          hitSlop={10}
+          onPress={withHapticPress(() => toggle(product))}
+          style={styles.wishlistBtn}>
+          <MaterialCommunityIcons
+            name={saved ? 'heart' : 'heart-outline'}
+            size={22}
+            color={saved ? colors.danger : '#ffffff'}
+            style={styles.wishlistIcon}
+          />
+        </Pressable>
+      </View>
 
       <View style={styles.bottomRow}>
         <View style={styles.priceCol}>
@@ -331,6 +349,8 @@ export function ProductListItem({ product, onCartFeedback, onPressCard }: Produc
   const { isDark } = useThemeMode();
   const { rs } = useResponsive();
   const { fs, t } = useLanguage();
+  const { isSaved, toggle } = useWishlist();
+  const saved = isSaved(product.id);
   const imageUri = getProductImageUri(product);
   const liquid = isLiquidUiEnabled();
   const cartQty = useProductCartQty(product.id);
@@ -354,21 +374,36 @@ export function ProductListItem({ product, onCartFeedback, onPressCard }: Produc
       backgroundColor={colors.card}
       cornerRadius={16}
       glassStyle="regular">
-      <Pressable
-        onPress={onPressCard}
-        disabled={!onPressCard}
-        style={styles.listMainPress}>
+      <View style={styles.listMainPress}>
         <View style={[styles.listImageWrap, { backgroundColor: colors.inputBg }]}>
-          <Image
-            source={{ uri: imageUri }}
-            style={styles.listImage}
-            contentFit="cover"
-            transition={200}
-          />
+          <Pressable onPress={onPressCard} disabled={!onPressCard} style={StyleSheet.absoluteFillObject}>
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.listImage}
+              contentFit="cover"
+              transition={200}
+            />
+          </Pressable>
           {product.ribbon ? <ProductRibbonBadge ribbon={product.ribbon} /> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={saved ? t('wishlist.remove') : t('wishlist.add')}
+            hitSlop={8}
+            onPress={withHapticPress(() => toggle(product))}
+            style={styles.listWishlistBtn}>
+            <MaterialCommunityIcons
+              name={saved ? 'heart' : 'heart-outline'}
+              size={18}
+              color={saved ? colors.danger : '#ffffff'}
+              style={styles.wishlistIcon}
+            />
+          </Pressable>
         </View>
 
-        <View style={styles.listTextCol}>
+        <Pressable
+          onPress={onPressCard}
+          disabled={!onPressCard}
+          style={styles.listTextCol}>
           <Text
             style={[styles.listName, { color: colors.text, fontSize: fs(rs(14)) }]}
             numberOfLines={1}
@@ -390,8 +425,8 @@ export function ProductListItem({ product, onCartFeedback, onPressCard }: Produc
               {qtyHint}
             </Text>
           ) : null}
-        </View>
-      </Pressable>
+        </Pressable>
+      </View>
 
       <View style={styles.listQtyWrap}>
         <CardQtyControl product={product} onCartFeedback={onCartFeedback} />
@@ -512,10 +547,26 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     overflow: 'hidden',
+    position: 'relative',
   },
   image: {
     width: '100%',
     height: '100%',
+  },
+  wishlistBtn: {
+    position: 'absolute',
+    right: 8,
+    top: 8,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  wishlistIcon: {
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   content: {
     paddingHorizontal: 10,
@@ -627,6 +678,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     position: 'relative',
   },
+  listWishlistBtn: {
+    position: 'absolute',
+    right: 4,
+    top: 4,
+    width: 26,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
   listImage: {
     width: '100%',
     height: '100%',
@@ -685,11 +746,13 @@ const styles = StyleSheet.create({
   },
   cartPrice: {
     fontWeight: '700',
+    flexShrink: 1,
   },
   cartBottomRow: {
     marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
   },
 });

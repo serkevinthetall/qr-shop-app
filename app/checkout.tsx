@@ -1,9 +1,9 @@
 import { useRouter, type Href } from 'expo-router';
-// Wire transfer / KPay — re-enable when payment screenshot flow is turned back on.
-// import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     findNodeHandle,
+    Image,
     Platform,
     Pressable,
     ScrollView,
@@ -13,7 +13,7 @@ import {
     UIManager,
     View,
 } from 'react-native';
-import { Button, HelperText, RadioButton } from 'react-native-paper';
+import { Button } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CelebrationBurst } from '@/components/celebration-burst';
@@ -28,7 +28,6 @@ import { InlineErrorBanner } from '@/components/inline-error-banner';
 import { KeyboardAwareScrollView } from '@/components/keyboard-aware-scroll-view';
 import { OrderSuccessModal } from '@/components/order-success-modal';
 import type { FulfillmentMethod } from '@/types/pickup-point';
-// const KPAY_QR_IMAGE = require('@/assets/images/kpay-qr.png');
 import { MYANMAR_FONTS } from '@/constants/fonts';
 import { inputCaretProps } from '@/constants/text-input';
 import { useAuth } from '@/contexts/auth-context';
@@ -39,14 +38,18 @@ import { useResponsive } from '@/hooks/use-responsive';
 import { fetchAddresses } from '@/services/address-api';
 import { getUserFacingError } from '@/services/auth-error';
 import { checkoutOrder } from '@/services/order-api';
+import {
+    fetchShopPayments,
+    isWalletPayment,
+    resolvePaymentMediaUrl,
+    type ShopPaymentMethod,
+} from '@/services/shop-payments-api';
 import { openStoreReviewPage, shouldAutoPromptStoreRating } from '@/services/store-review';
+import { uploadPaymentSlip } from '@/services/upload-api';
 import { formatAddressLine } from '@/types/address';
 import { formatPrice, unitPriceForQty } from '@/types/product';
 import { hapticSuccess } from '@/utils/haptics';
 import { isLiquidUiEnabled } from '@/utils/liquid-ui';
-
-// Keep wire_transfer in the type for when KPay / wire transfer is re-enabled.
-type PaymentMethod = 'cod' | 'wire_transfer';
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -85,15 +88,9 @@ export default function CheckoutScreen() {
     return productsTotal + fee;
   }, [fulfillmentClosed, fulfillmentMethod, productItems, quotedFeeKs]);
 
-  const deliveryFeeLabel = useMemo(() => {
-    if (fulfillmentMethod === 'pickup' || fulfillmentClosed) {
-      return t('cart.deliveryFree');
-    }
-    if (quotedFeeKs > 0) {
-      return formatPrice(quotedFeeKs);
-    }
-    return t('cart.deliveryFree');
-  }, [fulfillmentClosed, fulfillmentMethod, quotedFeeKs, t]);
+  const deliveryFeeAmount =
+    fulfillmentMethod === 'pickup' || fulfillmentClosed ? 0 : Math.max(0, quotedFeeKs);
+  const deliveryFeeLabel = formatPrice(deliveryFeeAmount);
 
   const handleAddressError = useCallback((message: string) => {
     setError(message);
@@ -116,15 +113,62 @@ export default function CheckoutScreen() {
     void syncDeliveryFee({ mode: 'pickup' });
   }, [syncDeliveryFee]);
 
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cod');
+  const [paymentMethods, setPaymentMethods] = useState<ShopPaymentMethod[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState('cod');
   const [preferredDeliveryDate, setPreferredDeliveryDate] = useState('');
   const [deliveryNotes, setDeliveryNotes] = useState('');
-  // const [screenshotUri, setScreenshotUri] = useState<string | null>(null);
+  const [slipLocalUri, setSlipLocalUri] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [showCelebration, setShowCelebration] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [promptStoreRating, setPromptStoreRating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!checkoutShopId) {
+      setPaymentMethods([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchShopPayments(checkoutShopId)
+      .then((methods) => {
+        if (cancelled) return;
+        setPaymentMethods(methods);
+        setPaymentMethod((current) =>
+          methods.some((m) => m.id === current) ? current : methods[0]?.id || 'cod',
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPaymentMethods([
+          {
+            id: 'cod',
+            enabled: true,
+            qrUrl: null,
+            label: 'Cash on delivery',
+            shortLabel: 'COD',
+            needsQr: false,
+          },
+        ]);
+        setPaymentMethod('cod');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [checkoutShopId]);
+
+  useEffect(() => {
+    if (!isWalletPayment(paymentMethod)) {
+      setSlipLocalUri(null);
+    }
+  }, [paymentMethod]);
+
+  const selectedPayment = useMemo(
+    () => paymentMethods.find((m) => m.id === paymentMethod) || paymentMethods[0] || null,
+    [paymentMethod, paymentMethods],
+  );
+  const walletSelected = isWalletPayment(paymentMethod);
+  const walletQrUri = resolvePaymentMediaUrl(selectedPayment?.qrUrl);
 
   const today = useMemo(() => new Date(), []);
 
@@ -153,8 +197,7 @@ export default function CheckoutScreen() {
     }, delay);
   }, []);
 
-  /*
-  const pickScreenshot = async () => {
+  const pickSlip = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
@@ -168,11 +211,10 @@ export default function CheckoutScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setScreenshotUri(result.assets[0].uri);
+      setSlipLocalUri(result.assets[0].uri);
       setError('');
     }
   };
-  */
 
   const handleCheckout = async () => {
     if (!token) {
@@ -185,12 +227,10 @@ export default function CheckoutScreen() {
       return;
     }
 
-    /*
-    if (paymentMethod === 'wire_transfer' && !screenshotUri) {
+    if (walletSelected && !slipLocalUri) {
       setError(t('checkout.errorUploadScreenshot'));
       return;
     }
-    */
 
     if (fulfillmentClosed) {
       setError(t('fulfillment.closedCheckout'));
@@ -218,8 +258,14 @@ export default function CheckoutScreen() {
         : '';
       const townshipId = selected?.zip ? String(selected.zip) : undefined;
 
+      let paymentSlipUrl: string | undefined;
+      if (walletSelected && slipLocalUri) {
+        paymentSlipUrl = await uploadPaymentSlip(token, slipLocalUri);
+      }
+
       await checkoutOrder(token, {
         paymentMethod,
+        paymentSlipUrl,
         preferredDeliveryDate,
         deliveryNotes,
         fulfillmentMethod: selection.fulfillmentMethod,
@@ -271,6 +317,18 @@ export default function CheckoutScreen() {
             paddingBottom: Math.max(24, insets.bottom + 16),
           },
         ]}>
+        {token && checkoutShopId ? (
+          <FulfillmentCheckoutSection
+            ref={fulfillmentRef}
+            token={token}
+            shopId={checkoutShopId}
+            onError={handleAddressError}
+            onFulfillmentChange={handleFulfillmentChange}
+            onAddressSelectionChange={handleAddressSelectionChange}
+            onAvailabilityChange={handleAvailabilityChange}
+          />
+        ) : null}
+
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.cardTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16) }]}>{t('checkout.orderSummary')}</Text>
 
@@ -322,56 +380,94 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
-        {token && checkoutShopId ? (
-          <FulfillmentCheckoutSection
-            ref={fulfillmentRef}
-            token={token}
-            shopId={checkoutShopId}
-            onError={handleAddressError}
-            onFulfillmentChange={handleFulfillmentChange}
-            onAddressSelectionChange={handleAddressSelectionChange}
-            onAvailabilityChange={handleAvailabilityChange}
-          />
-        ) : null}
-
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.cardTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16) }]}>{t('checkout.paymentMethod')}</Text>
-
-          <RadioButton.Group
-            onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
-            value={paymentMethod}>
-            <View style={styles.radioRow}>
-              <RadioButton value="cod" />
-              <Text style={{ color: colors.text, fontSize: fs(15), lineHeight: lh(15) }}>{t('checkout.cod')}</Text>
-            </View>
-            {/*
-            <View style={styles.radioRow}>
-              <RadioButton value="wire_transfer" />
-              <Text style={{ color: colors.text, fontSize: fs(15), lineHeight: lh(15) }}>{t('checkout.wireTransfer')}</Text>
-            </View>
-            */}
-          </RadioButton.Group>
-        </View>
-
-        {/*
-        {paymentMethod === 'wire_transfer' ? (
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.cardTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16) }]}>{t('checkout.kpayPayment')}</Text>
-
-            <View style={[styles.qrWrap, { backgroundColor: colors.inputBg }]}>
-              <Image source={KPAY_QR_IMAGE} style={styles.kpayQrImage} resizeMode="contain" />
-            </View>
-
-            <Button mode="outlined" icon="camera" onPress={pickScreenshot} style={styles.uploadButton}>
-              {screenshotUri ? t('checkout.changeScreenshot') : t('checkout.uploadScreenshot')}
-            </Button>
-
-            {screenshotUri ? (
-              <Image source={{ uri: screenshotUri }} style={styles.previewImage} resizeMode="cover" />
-            ) : null}
+          <Text
+            style={[
+              styles.paymentEyebrow,
+              { color: colors.textMuted, fontSize: fs(11), lineHeight: lh(11) },
+            ]}>
+            {t('checkout.payment')}
+          </Text>
+          <View style={styles.paymentChips}>
+            {paymentMethods.map((method) => {
+              const selected = method.id === paymentMethod;
+              const label =
+                method.id === 'cod'
+                  ? fulfillmentMethod === 'pickup'
+                    ? t('checkout.cash')
+                    : t('checkout.cod')
+                  : method.shortLabel || method.label;
+              return (
+                <Pressable
+                  key={method.id}
+                  onPress={() => setPaymentMethod(method.id)}
+                  style={[
+                    styles.paymentChip,
+                    {
+                      borderColor: selected ? colors.primary : colors.border,
+                      backgroundColor: selected ? colors.primaryMuted : colors.surface,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}>
+                  <Text
+                    style={{
+                      color: selected ? colors.primary : colors.text,
+                      fontSize: fs(13),
+                      fontWeight: '600',
+                    }}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
-        ) : null}
-        */}
+          <Text style={{ color: colors.textMuted, fontSize: fs(12), lineHeight: lh(12), marginTop: 8 }}>
+            {walletSelected
+              ? t('checkout.scanWallet', {
+                  wallet: selectedPayment?.shortLabel || selectedPayment?.label || paymentMethod,
+                })
+              : t('checkout.payOnReceive')}
+          </Text>
+
+          {walletSelected ? (
+            <View style={styles.walletBlock}>
+              {walletQrUri ? (
+                <Image source={{ uri: walletQrUri }} style={styles.walletQr} resizeMode="contain" />
+              ) : (
+                <Text style={{ color: colors.danger, fontSize: fs(12), lineHeight: lh(12) }}>
+                  {t('checkout.scanWallet', {
+                    wallet: selectedPayment?.shortLabel || paymentMethod,
+                  })}
+                </Text>
+              )}
+              <Text
+                style={{
+                  color: colors.text,
+                  fontSize: fs(12),
+                  fontWeight: '600',
+                  marginTop: 12,
+                }}>
+                {t('checkout.transferSlipRequired')}
+              </Text>
+              {slipLocalUri ? (
+                <Image source={{ uri: slipLocalUri }} style={styles.slipPreview} resizeMode="cover" />
+              ) : null}
+              <View style={styles.slipActions}>
+                <Button mode="outlined" icon="camera" onPress={pickSlip} style={styles.uploadButton}>
+                  {slipLocalUri ? t('checkout.replaceSlip') : t('checkout.uploadScreenshot')}
+                </Button>
+                {slipLocalUri ? (
+                  <Pressable onPress={() => setSlipLocalUri(null)}>
+                    <Text style={{ color: colors.textMuted, fontSize: fs(12), fontWeight: '600' }}>
+                      {t('checkout.removeSlip')}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+        </View>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <DatePickerField
@@ -566,35 +662,47 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 4,
   },
-  radioRow: {
+  paymentEyebrow: {
+    fontWeight: '600',
+    letterSpacing: 0.4,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  paymentChips: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  /*
-  qrWrap: {
-    alignItems: 'center',
-    borderRadius: 16,
-    backgroundColor: '#f7f8f7',
-    padding: 12,
+  paymentChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  walletBlock: {
     marginTop: 12,
-    overflow: 'hidden',
   },
-  kpayQrImage: {
-    width: '100%',
-    maxWidth: 280,
-    height: 360,
-  },
-  uploadButton: {
-    marginTop: 16,
-  },
-  previewImage: {
-    width: '100%',
+  walletQr: {
+    width: 180,
     height: 180,
-    marginTop: 12,
+    alignSelf: 'center',
     borderRadius: 12,
   },
-  */
+  slipPreview: {
+    width: 160,
+    height: 160,
+    alignSelf: 'center',
+    borderRadius: 12,
+    marginTop: 10,
+  },
+  slipActions: {
+    marginTop: 12,
+    gap: 10,
+    alignItems: 'flex-start',
+  },
+  uploadButton: {
+    alignSelf: 'stretch',
+  },
   submitButton: {
     paddingVertical: 8,
   },

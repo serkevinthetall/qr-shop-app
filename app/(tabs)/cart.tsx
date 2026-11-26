@@ -47,10 +47,7 @@ export default function CartScreen() {
     if (isDeliveryFeeLoading && deliveryFeeAmount <= 0) {
       return t('cart.deliveryLoading');
     }
-    if (deliveryFeeAmount > 0) {
-      return formatPrice(deliveryFeeAmount);
-    }
-    return t('cart.deliveryFree');
+    return formatPrice(Math.max(0, deliveryFeeAmount));
   }, [deliveryFeeAmount, isDeliveryFeeLoading, t]);
 
   const listData = useMemo(() => productItems, [productItems]);
