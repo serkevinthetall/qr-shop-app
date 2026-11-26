@@ -10,6 +10,7 @@ import { Image } from 'expo-image';
 import { AppToast } from '@/components/app-toast';
 import { InlineErrorBanner } from '@/components/inline-error-banner';
 import { LiquidSurface } from '@/components/liquid-surface';
+import { ProductFoodInfoSheet } from '@/components/product-food-info-sheet';
 import { ProductCard } from '@/components/products/product-card';
 import { ProductDetailSkeleton, SimilarProductsSkeleton } from '@/components/products/product-card-skeleton';
 import { QuantityStepper } from '@/components/quantity-stepper';
@@ -64,6 +65,16 @@ export default function ProductDetailScreen() {
           addToCart: 'ခြင်းထဲ ထည့်ရန်',
           notFound: t('errors.productNotFound'),
           added: 'စျေးခြင်းထဲ ထည့်ပြီးပါပြီ',
+          foodIngredients: 'Ingredients | ပါဝင်ပစ္စည်းများ',
+          foodAllergen: 'Allergen Information | ဓာတ်မတည့်မှုဆိုင်ရာ အချက်အလက်',
+          foodNutrition: 'Nutrition Facts | အာဟာရဆိုင်ရာ အချက်အလက်',
+          foodServing: 'တစ်ကြိမ်စားပမာဏ',
+          foodEnergy: 'စွမ်းအင်',
+          foodFat: 'အဆီ',
+          foodSodium: 'ဆိုဒီယမ်',
+          foodStorage: 'Storage Instructions | သိမ်းဆည်းရန် ညွှန်ကြားချက်',
+          foodDisclaimer:
+            'အထက်ပါ အချက်အလက်များသည် နမူနာသာဖြစ်သည်။ အမှန်တကယ် ပါဝင်ပစ္စည်း၊ ဓာတ်မတည့်မှု၊ အာဟာရနှင့် သိမ်းဆည်းနည်းကို ထုတ်လုပ်သူထံမှ ရယူရပါမည်။',
         }
       : {
           back: 'Back',
@@ -76,6 +87,16 @@ export default function ProductDetailScreen() {
           addToCart: 'Add to Cart',
           notFound: t('errors.productNotFound'),
           added: 'Added to cart',
+          foodIngredients: 'Ingredients | ပါဝင်ပစ္စည်းများ',
+          foodAllergen: 'Allergen Information | ဓာတ်မတည့်မှုဆိုင်ရာ အချက်အလက်',
+          foodNutrition: 'Nutrition Facts | အာဟာရဆိုင်ရာ အချက်အလက်',
+          foodServing: 'Serving size',
+          foodEnergy: 'Energy',
+          foodFat: 'Fat',
+          foodSodium: 'Sodium',
+          foodStorage: 'Storage Instructions | သိမ်းဆည်းရန် ညွှန်ကြားချက်',
+          foodDisclaimer:
+            'All information above is illustrative. Actual ingredients, allergens, nutrition and storage conditions must come from the manufacturer.',
         };
 
   const languageRef = useRef(language);
@@ -368,42 +389,82 @@ export default function ProductDetailScreen() {
             </Text>
           ) : null}
 
-          <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16) }]}>
-            {labels.description}
-          </Text>
+          <ProductFoodInfoSheet
+            foodInfo={product.foodInfo}
+            labels={{
+              ingredients: labels.foodIngredients,
+              allergen: labels.foodAllergen,
+              nutrition: labels.foodNutrition,
+              serving: labels.foodServing,
+              energy: labels.foodEnergy,
+              fat: labels.foodFat,
+              sodium: labels.foodSodium,
+              storage: labels.foodStorage,
+              disclaimer: labels.foodDisclaimer,
+            }}
+          />
 
-          {longDescription || internalNotes ? (
+          {!product.foodInfo?.enabled && (longDescription || internalNotes || description) ? (
             <>
-              {longDescription ? (
-                <View style={styles.descriptionBlock}>
-                  {internalNotes ? (
-                    <Text style={[styles.descriptionSubtitle, { color: colors.text, fontSize: fs(14), lineHeight: lh(14) }]}>
-                      {labels.longDescription}
-                    </Text>
+              <Text style={[styles.sectionTitle, { color: colors.text, fontSize: fs(16), lineHeight: lh(16) }]}>
+                {labels.description}
+              </Text>
+              {longDescription || internalNotes ? (
+                <>
+                  {longDescription ? (
+                    <View style={styles.descriptionBlock}>
+                      {internalNotes ? (
+                        <Text
+                          style={[
+                            styles.descriptionSubtitle,
+                            { color: colors.text, fontSize: fs(14), lineHeight: lh(14) },
+                          ]}>
+                          {labels.longDescription}
+                        </Text>
+                      ) : null}
+                      <Text
+                        style={[
+                          styles.description,
+                          { color: colors.textMuted, fontSize: fs(14), lineHeight: lh(14) },
+                        ]}>
+                        {longDescription}
+                      </Text>
+                    </View>
                   ) : null}
-                  <Text style={[styles.description, { color: colors.textMuted, fontSize: fs(14), lineHeight: lh(14) }]}>
-                    {longDescription}
-                  </Text>
-                </View>
-              ) : null}
-
-              {internalNotes ? (
-                <View style={[styles.descriptionBlock, longDescription ? styles.descriptionBlockSpaced : null]}>
-                  <Text style={[styles.descriptionSubtitle, { color: colors.text, fontSize: fs(14), lineHeight: lh(14) }]}>
-                    {labels.internalNotes}
-                  </Text>
-                  <Text style={[styles.description, { color: colors.textMuted, fontSize: fs(14), lineHeight: lh(14) }]}>
-                    {internalNotes}
-                  </Text>
-                </View>
-              ) : null}
+                  {internalNotes ? (
+                    <View
+                      style={[
+                        styles.descriptionBlock,
+                        longDescription ? styles.descriptionBlockSpaced : null,
+                      ]}>
+                      <Text
+                        style={[
+                          styles.descriptionSubtitle,
+                          { color: colors.text, fontSize: fs(14), lineHeight: lh(14) },
+                        ]}>
+                        {labels.internalNotes}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.description,
+                          { color: colors.textMuted, fontSize: fs(14), lineHeight: lh(14) },
+                        ]}>
+                        {internalNotes}
+                      </Text>
+                    </View>
+                  ) : null}
+                </>
+              ) : (
+                <Text
+                  style={[
+                    styles.description,
+                    { color: colors.textMuted, fontSize: fs(14), lineHeight: lh(14) },
+                  ]}>
+                  {description}
+                </Text>
+              )}
             </>
-          ) : (
-            <Text style={[styles.description, { color: colors.textMuted, fontSize: fs(14), lineHeight: lh(14) }]}>
-              {description ||
-                (!detailsLoaded ? labels.loadingDescription : labels.noDescription)}
-            </Text>
-          )}
+          ) : null}
 
           {similarLoading || similar.length > 0 ? (
             <>

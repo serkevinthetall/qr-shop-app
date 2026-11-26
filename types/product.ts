@@ -1,5 +1,8 @@
 import { getApiBaseUrl } from '@/constants/api';
+import type { ProductFoodInfo } from '@/lib/product-food-info';
 import { resolvePlatformMediaUrl } from '@/services/platform-envelope';
+
+export type { ProductFoodInfo };
 
 export type CategoryRef = [string, string] | false;
 
@@ -39,6 +42,8 @@ export type Product = {
   write_date?: string | false;
   ribbon?: ProductRibbon | null;
   compare_at?: number | null;
+  /** Optional food information sheet when merchant enabled it. */
+  foodInfo?: ProductFoodInfo;
 };
 
 /** Sentinel for the Just for you category chip (hidden without membership). */

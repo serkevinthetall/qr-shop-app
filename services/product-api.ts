@@ -7,6 +7,7 @@ import {
   resolvePlatformMediaUrl,
   unwrapPlatformData,
 } from '@/services/platform-envelope';
+import { parseProductFoodInfo } from '@/lib/product-food-info';
 import {
   JUST_FOR_YOU,
   type Category,
@@ -87,6 +88,7 @@ function mapAppProduct(row: MallRow): Product {
         }
       : null,
     compare_at: compareAtKs,
+    foodInfo: parseProductFoodInfo(row.foodInfo),
   };
 }
 
