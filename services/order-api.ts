@@ -131,6 +131,8 @@ type PlatformOrder = {
   buyerName?: string | null;
   buyerPhone?: string | null;
   address?: string | null;
+  buyerNote?: string | null;
+  preferredDeliveryDate?: string | null;
   fulfillment?: string | null;
   payment?: string | null;
   totalKs?: number;
@@ -212,7 +214,9 @@ function mapPlatformOrder(raw: PlatformOrder): Order {
         : null,
     delivery_status: stageToDeliveryStatus(raw.stage),
     shop_name: raw.shop?.name,
-    x_studio_delivery_notes: false,
+    x_studio_delivery_notes: String(raw.buyerNote || '').trim() || false,
+    x_studio_preferred_delivery_date:
+      String(raw.preferredDeliveryDate || '').trim() || false,
     note: false,
   };
 }
@@ -414,32 +418,37 @@ export async function checkoutOrder(token: string, payload: CheckoutPayload) {
   const buyerNote =
     String(payload.deliveryNotes || payload.note || '')
       .trim()
-      .slice(0, 1000) || undefined;
+      .slice(0, 1000) || '';
   const preferredRaw = String(payload.preferredDeliveryDate || '').trim();
-  const preferredDeliveryDate = /^\d{4}-\d{2}-\d{2}$/.test(preferredRaw)
-    ? preferredRaw
-    : undefined;
+  const preferredDeliveryDate =
+    (fulfillment === 'delivery' || fulfillment === 'express') &&
+    /^\d{4}-\d{2}-\d{2}$/.test(preferredRaw)
+      ? preferredRaw
+      : '';
 
-  const packages = [...byShop.entries()].map(([shopId, items]) => ({
-    shopId,
-    buyerName: payload.buyerName || undefined,
-    fulfillment,
-    payment,
-    paymentSlipUrl,
-    buyerNote,
-    preferredDeliveryDate,
-    address:
-      fulfillment === 'delivery' || fulfillment === 'express'
-        ? payload.addressText || undefined
-        : undefined,
-    townshipId: payload.townshipId || undefined,
-    lines: items.map((item) => ({
-      productId: parseSkuId(item),
-      qty: Math.max(1, Math.floor(Number(item.quantity) || 1)),
-    })),
-    source: 'marketplace' as const,
-    clientSurface: 'app' as const,
-  }));
+  const packages = [...byShop.entries()].map(([shopId, items]) => {
+    const pkg: Record<string, unknown> = {
+      shopId,
+      fulfillment,
+      payment,
+      lines: items.map((item) => ({
+        productId: parseSkuId(item),
+        qty: Math.max(1, Math.floor(Number(item.quantity) || 1)),
+      })),
+      source: 'marketplace' as const,
+      clientSurface: 'app' as const,
+    };
+    if (payload.buyerName) pkg.buyerName = payload.buyerName;
+    if (paymentSlipUrl) pkg.paymentSlipUrl = paymentSlipUrl;
+    /** Only send when the buyer actually filled them — no empty placeholders. */
+    if (buyerNote) pkg.buyerNote = buyerNote;
+    if (preferredDeliveryDate) pkg.preferredDeliveryDate = preferredDeliveryDate;
+    if (fulfillment === 'delivery' || fulfillment === 'express') {
+      if (payload.addressText) pkg.address = payload.addressText;
+      if (payload.townshipId) pkg.townshipId = payload.townshipId;
+    }
+    return pkg;
+  });
 
   const { response, data } = await apiRequest<unknown>('/api/checkout', {
     method: 'POST',

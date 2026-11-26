@@ -92,12 +92,27 @@ export default function CheckoutScreen() {
     fulfillmentMethod === 'pickup' || fulfillmentClosed ? 0 : Math.max(0, quotedFeeKs);
   const deliveryFeeLabel = formatPrice(deliveryFeeAmount);
 
+  const [paymentMethods, setPaymentMethods] = useState<ShopPaymentMethod[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState('cod');
+  const [preferredDeliveryDate, setPreferredDeliveryDate] = useState('');
+  const [deliveryNotes, setDeliveryNotes] = useState('');
+  const [slipLocalUri, setSlipLocalUri] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [promptStoreRating, setPromptStoreRating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleAddressError = useCallback((message: string) => {
     setError(message);
   }, []);
 
   const handleFulfillmentChange = useCallback((method: FulfillmentMethod) => {
     setFulfillmentMethod(method);
+    if (method === 'pickup') {
+      setPreferredDeliveryDate('');
+      setDeliveryNotes('');
+    }
   }, []);
 
   const handleAddressSelectionChange = useCallback((_addressId: string | null) => {
@@ -112,17 +127,6 @@ export default function CheckoutScreen() {
   useEffect(() => {
     void syncDeliveryFee({ mode: 'pickup' });
   }, [syncDeliveryFee]);
-
-  const [paymentMethods, setPaymentMethods] = useState<ShopPaymentMethod[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState('cod');
-  const [preferredDeliveryDate, setPreferredDeliveryDate] = useState('');
-  const [deliveryNotes, setDeliveryNotes] = useState('');
-  const [slipLocalUri, setSlipLocalUri] = useState<string | null>(null);
-  const [error, setError] = useState('');
-  const [showCelebration, setShowCelebration] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [promptStoreRating, setPromptStoreRating] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!checkoutShopId) {
@@ -263,11 +267,14 @@ export default function CheckoutScreen() {
         paymentSlipUrl = await uploadPaymentSlip(token, slipLocalUri);
       }
 
+      const isDoor =
+        selection.fulfillmentMethod === 'delivery' ||
+        selection.fulfillmentMethod === 'express';
       await checkoutOrder(token, {
         paymentMethod,
         paymentSlipUrl,
-        preferredDeliveryDate,
-        deliveryNotes,
+        preferredDeliveryDate: isDoor ? preferredDeliveryDate.trim() : '',
+        deliveryNotes: isDoor ? deliveryNotes.trim() : '',
         fulfillmentMethod: selection.fulfillmentMethod,
         addressId: String(selection.addressId),
         addressText: addressText || undefined,
@@ -469,55 +476,57 @@ export default function CheckoutScreen() {
           ) : null}
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <DatePickerField
-            label={t('checkout.preferredDeliveryDate')}
-            value={preferredDeliveryDate}
-            onChange={setPreferredDeliveryDate}
-            minimumDate={today}
-            placeholder={t('checkout.selectDate')}
-          />
-          <View
-            ref={notesFieldRef}
-            style={[
-              styles.notesField,
-              {
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-              },
-            ]}>
-            <Text
-              style={[
-                styles.notesLabel,
-                { color: colors.textMuted, fontSize: fs(rs(12)), lineHeight: lh(12) },
-              ]}>
-              {t('checkout.deliveryNotes')}
-            </Text>
-            <TextInput
-              value={deliveryNotes}
-              onChangeText={setDeliveryNotes}
-              onFocus={scrollNotesIntoView}
-              placeholder={t('checkout.deliveryNotesPlaceholder')}
-              placeholderTextColor={colors.textMuted}
-              returnKeyType="done"
-              blurOnSubmit
-              multiline
-              textAlignVertical="top"
-              style={[
-                styles.notesInput,
-                {
-                  color: colors.text,
-                  fontSize: fs(15),
-                  // Myanmar glyphs need room — never force a tight height/lineHeight.
-                  ...(language === 'my'
-                    ? { fontFamily: MYANMAR_FONTS.regular }
-                    : null),
-                },
-              ]}
-              {...inputCaretProps(isDark)}
+        {fulfillmentMethod === 'delivery' || fulfillmentMethod === 'express' ? (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <DatePickerField
+              label={t('checkout.preferredDeliveryDate')}
+              value={preferredDeliveryDate}
+              onChange={setPreferredDeliveryDate}
+              minimumDate={today}
+              placeholder={t('checkout.selectDate')}
             />
+            <View
+              ref={notesFieldRef}
+              style={[
+                styles.notesField,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                },
+              ]}>
+              <Text
+                style={[
+                  styles.notesLabel,
+                  { color: colors.textMuted, fontSize: fs(rs(12)), lineHeight: lh(12) },
+                ]}>
+                {t('checkout.deliveryNotes')}
+              </Text>
+              <TextInput
+                value={deliveryNotes}
+                onChangeText={setDeliveryNotes}
+                onFocus={scrollNotesIntoView}
+                placeholder={t('checkout.deliveryNotesPlaceholder')}
+                placeholderTextColor={colors.textMuted}
+                returnKeyType="done"
+                blurOnSubmit
+                multiline
+                textAlignVertical="top"
+                style={[
+                  styles.notesInput,
+                  {
+                    color: colors.text,
+                    fontSize: fs(15),
+                    // Myanmar glyphs need room — never force a tight height/lineHeight.
+                    ...(language === 'my'
+                      ? { fontFamily: MYANMAR_FONTS.regular }
+                      : null),
+                  },
+                ]}
+                {...inputCaretProps(isDark)}
+              />
+            </View>
           </View>
-        </View>
+        ) : null}
 
         {error ? (
           <InlineErrorBanner
