@@ -10,7 +10,7 @@ import {
 
 export type AppNotification = {
   id: string;
-  type?: 'product' | 'coupon' | string;
+  type?: 'product' | 'coupon' | 'message' | 'order' | string;
   title?: string;
   body?: string;
   product_id?: string;
@@ -18,6 +18,11 @@ export type AppNotification = {
   ribbon_name?: string;
   coupon_code?: string;
   amount?: number;
+  /** Shop chat (merchant reply) — open `/chat/[shopId]`. */
+  shop_id?: string;
+  thread_id?: string;
+  order_id?: string;
+  order_code?: string;
   read?: boolean;
   date?: string;
   create_date?: string;

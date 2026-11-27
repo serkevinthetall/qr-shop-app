@@ -30,6 +30,20 @@ function describeNotification(item: AppNotification, language: Language) {
     };
   }
 
+  if (item.type === 'message') {
+    return {
+      title: item.title?.trim() || translate(language, 'notifications.newMessageTitle'),
+      body: item.body?.trim() || translate(language, 'notifications.newMessageBody'),
+    };
+  }
+
+  if (item.type === 'order') {
+    return {
+      title: item.title?.trim() || translate(language, 'notifications.orderUpdateTitle'),
+      body: item.body?.trim() || translate(language, 'notifications.orderUpdateBody'),
+    };
+  }
+
   return {
     title: translate(language, 'notifications.newCouponTitle'),
     body: translate(language, 'notifications.newCouponBody', {
@@ -139,7 +153,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             const data =
               item.type === 'product'
                 ? { id: item.id, type: 'product', productId: item.product_id }
-                : { id: item.id, type: 'coupon', couponCode: item.coupon_code };
+                : item.type === 'message'
+                  ? {
+                      id: item.id,
+                      type: 'chat',
+                      kind: 'message',
+                      shopId: item.shop_id,
+                      threadId: item.thread_id,
+                    }
+                  : item.type === 'order'
+                    ? {
+                        id: item.id,
+                        type: 'order',
+                        kind: 'order',
+                        orderId: item.order_id,
+                      }
+                    : { id: item.id, type: 'coupon', couponCode: item.coupon_code };
 
             presentLocalNotification(title, body, data).catch(() => {});
           }

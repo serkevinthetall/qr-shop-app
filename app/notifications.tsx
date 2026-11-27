@@ -61,33 +61,62 @@ export default function NotificationsScreen() {
 
   const renderItem = ({ item }: { item: AppNotification }) => {
     const isProduct = item.type === 'product';
-    const title =
-      item.type === 'product'
-        ? t('notifications.productOccurredTitle', {
-            ribbon: item.ribbon_name?.trim() || t('notifications.newProductTitle'),
-          })
-        : t('notifications.newCouponTitle');
-    const body =
-      item.type === 'product'
-        ? `${item.product_name} — ${t('notifications.newProductBody')}`
-        : t('notifications.newCouponBody', { code: item.coupon_code || '' });
+    const isMessage = item.type === 'message';
+    const isOrder = item.type === 'order';
+    const title = isProduct
+      ? t('notifications.productOccurredTitle', {
+          ribbon: item.ribbon_name?.trim() || t('notifications.newProductTitle'),
+        })
+      : isMessage
+        ? item.title?.trim() || t('notifications.newMessageTitle')
+        : isOrder
+          ? item.title?.trim() || t('notifications.orderUpdateTitle')
+          : t('notifications.newCouponTitle');
+    const body = isProduct
+      ? `${item.product_name} — ${t('notifications.newProductBody')}`
+      : isMessage
+        ? item.body?.trim() || t('notifications.newMessageBody')
+        : isOrder
+          ? item.body?.trim() || t('notifications.orderUpdateBody')
+          : t('notifications.newCouponBody', { code: item.coupon_code || '' });
+
+    const canOpen =
+      (isProduct && Boolean(item.product_id)) ||
+      (isMessage && Boolean(item.shop_id)) ||
+      (isOrder && Boolean(item.order_id));
 
     const onPress = () => {
-      if (item.type === 'product' && item.product_id) {
+      if (isProduct && item.product_id) {
         router.push(`/product/${item.product_id}` as Href);
+        return;
+      }
+      if (isMessage && item.shop_id) {
+        router.push(`/chat/${encodeURIComponent(item.shop_id)}` as Href);
+        return;
+      }
+      if (isMessage) {
+        router.push('/messages' as Href);
+        return;
+      }
+      if (isOrder && item.order_id) {
+        router.push(`/order/${encodeURIComponent(item.order_id)}` as Href);
       }
     };
+
+    const iconName = isProduct
+      ? 'local-mall'
+      : isMessage
+        ? 'chat'
+        : isOrder
+          ? 'local-shipping'
+          : 'confirmation-number';
 
     return (
       <Pressable
         onPress={onPress}
         style={[styles.item, { backgroundColor: colors.card, borderColor: cardBorder }]}>
         <View style={[styles.iconWrap, { backgroundColor: colors.primaryMuted }]}>
-          <MaterialIcons
-            name={isProduct ? 'local-mall' : 'confirmation-number'}
-            size={22}
-            color={colors.primary}
-          />
+          <MaterialIcons name={iconName} size={22} color={colors.primary} />
         </View>
         <View style={styles.itemBody}>
           <Text style={[styles.itemTitle, { color: colors.text, fontSize: fs(15), lineHeight: lh(15) }]}>
@@ -105,7 +134,7 @@ export default function NotificationsScreen() {
             {getRelativeTime(item.date || item.create_date || '')}
           </Text>
         </View>
-        {item.type === 'product' ? (
+        {canOpen || isMessage ? (
           <MaterialIcons name="chevron-right" size={16} color={colors.textMuted} />
         ) : null}
       </Pressable>
